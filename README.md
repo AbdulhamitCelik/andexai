@@ -45,20 +45,44 @@ Proposal → Context → Impact → Review → Consensus → Manager Approval
 
 ```bash
 npm install
+cp .env.example .env.local   # optional — add a free LLM key to enable AI features
 npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000)
 
+## LLM Providers
+
+Andex AI includes a multi-provider LLM client with automatic fallback. Add any
+**one** free API key to `.env.local` and the AI features light up (the sidebar
+shows a live "providers online" status, and the dashboard's *Ask the Project
+Brain* widget starts answering).
+
+| Provider   | Env var             | Free key                              |
+| ---------- | ------------------- | ------------------------------------- |
+| Groq       | `GROQ_API_KEY`      | <https://console.groq.com/keys>       |
+| Cerebras   | `CEREBRAS_API_KEY`  | <https://cloud.cerebras.ai>          |
+| OpenRouter | `OPENROUTER_API_KEY`| <https://openrouter.ai/keys>          |
+| NVIDIA NIM | `NVIDIA_API_KEY`    | <https://build.nvidia.com>            |
+| Mistral    | `MISTRAL_API_KEY`   | <https://console.mistral.ai/api-keys> |
+
+Verify your keys:
+
+```bash
+npm run test:llm
+```
+
+Full usage guide (client API, HTTP routes, adding providers): **[docs/LLM.md](docs/LLM.md)**.
+
 ## Deploy to Vercel
 
 1. Push to GitHub
 2. Import project in [Vercel](https://vercel.com)
-3. Set environment variables (optional for demo mode):
+3. Set environment variables (all optional for demo mode):
 
 ```env
 DATABASE_URL=postgresql://...   # Optional — uses in-memory store without it
-OPENAI_API_KEY=sk-...           # For live LLM integration
+GROQ_API_KEY=gsk_...            # Any one LLM key enables AI features (see table above)
 ```
 
 4. Deploy — `vercel.json` is preconfigured

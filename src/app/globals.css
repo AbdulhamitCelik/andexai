@@ -4,24 +4,24 @@
 
 @layer base {
   :root {
-    --background: 222 47% 6%;
+    --background: 222 47% 5%;
     --foreground: 210 40% 98%;
-    --card: 222 47% 8%;
+    --card: 222 44% 8%;
     --card-foreground: 210 40% 98%;
     --primary: 217 91% 60%;
     --primary-foreground: 222 47% 6%;
-    --secondary: 217 33% 17%;
+    --secondary: 217 33% 15%;
     --secondary-foreground: 210 40% 98%;
-    --muted: 217 33% 17%;
-    --muted-foreground: 215 20% 65%;
+    --muted: 217 33% 15%;
+    --muted-foreground: 215 20% 62%;
     --accent: 217 33% 17%;
     --accent-foreground: 210 40% 98%;
     --destructive: 0 62% 50%;
     --destructive-foreground: 210 40% 98%;
-    --border: 217 33% 17%;
+    --border: 217 33% 15%;
     --input: 217 33% 17%;
     --ring: 217 91% 60%;
-    --radius: 0.5rem;
+    --radius: 0.65rem;
   }
 }
 
@@ -31,5 +31,68 @@
   }
   body {
     @apply bg-background text-foreground antialiased;
+    background-image:
+      radial-gradient(60rem 60rem at 100% -10%, hsl(217 91% 60% / 0.08), transparent 60%),
+      radial-gradient(50rem 50rem at -10% 110%, hsl(265 85% 60% / 0.07), transparent 55%);
+    background-attachment: fixed;
   }
+}
+
+@layer utilities {
+  /* Subtle brand gradient text */
+  .text-gradient {
+    @apply bg-gradient-to-r from-primary via-sky-400 to-violet-400 bg-clip-text text-transparent;
+  }
+
+  /* Frosted card surface */
+  .glass {
+    background: hsl(var(--card) / 0.7);
+    backdrop-filter: blur(12px);
+  }
+
+  .glow-primary {
+    box-shadow: 0 0 0 1px hsl(var(--primary) / 0.2), 0 8px 30px -12px hsl(var(--primary) / 0.5);
+  }
+
+  .animate-in {
+    animation: fade-in 0.4s ease both;
+  }
+
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes pulse-dot {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.35; }
+  }
+  .animate-pulse-dot {
+    animation: pulse-dot 2s ease-in-out infinite;
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: hsl(217 33% 20%);
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(217 33% 28%);
+  background-clip: content-box;
 }
