@@ -28,11 +28,16 @@ interface DashboardData {
 function DashboardContent() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/project")
       .then((r) => r.json())
-      .then(setData)
+      .then((d) => {
+        if (d && Array.isArray(d.projects)) setData(d);
+        else setError(d?.error ?? "Failed to load dashboard data.");
+      })
+      .catch(() => setError("Failed to load dashboard data."))
       .finally(() => setLoading(false));
   }, []);
 
@@ -44,7 +49,17 @@ function DashboardContent() {
     );
   }
 
-  if (!data) return null;
+  if (!data) {
+    return (
+      <div className="flex h-full items-center justify-center p-8">
+        <div className="max-w-md space-y-2 text-center">
+          <AlertTriangle className="mx-auto h-8 w-8 text-destructive" />
+          <p className="font-semibold">Backend not available</p>
+          <p className="text-sm text-muted-foreground">{error ?? "Unknown error."}</p>
+        </div>
+      </div>
+    );
+  }
 
   const { projects, proposals, stats, agentLogs, driftAlerts } = data;
   const primaryProject = projects[0];
