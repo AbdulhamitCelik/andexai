@@ -69,6 +69,22 @@ export const PROVIDERS: LlmProvider[] = [
     baseUrl: "https://api.mistral.ai/v1",
     defaultModel: "mistral-small-latest",
   },
+  {
+    id: "sambanova",
+    name: "SambaNova Cloud",
+    envKey: "SAMBANOVA_API_KEY",
+    baseUrlEnv: "SAMBANOVA_BASE_URL",
+    baseUrl: "https://api.sambanova.ai/v1",
+    defaultModel: "Meta-Llama-3.3-70B-Instruct",
+  },
+  {
+    id: "cohere",
+    name: "Cohere",
+    envKey: "COHERE_API_KEY",
+    baseUrlEnv: "COHERE_BASE_URL",
+    baseUrl: "https://api.cohere.ai/compatibility/v1",
+    defaultModel: "command-r-08-2024",
+  },
 ];
 
 export interface ChatMessage {

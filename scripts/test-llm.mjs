@@ -43,6 +43,20 @@ const providers = [
     model: "mistral-small-latest",
     extraHeaders: {},
   },
+  {
+    name: "SambaNova Cloud",
+    key: process.env.SAMBANOVA_API_KEY,
+    baseUrl: process.env.SAMBANOVA_BASE_URL || "https://api.sambanova.ai/v1",
+    model: "Meta-Llama-3.3-70B-Instruct",
+    extraHeaders: {},
+  },
+  {
+    name: "Cohere",
+    key: process.env.COHERE_API_KEY,
+    baseUrl: process.env.COHERE_BASE_URL || "https://api.cohere.ai/compatibility/v1",
+    model: "command-r-08-2024",
+    extraHeaders: {},
+  },
 ];
 
 async function test({ name, key, baseUrl, model, extraHeaders }) {
