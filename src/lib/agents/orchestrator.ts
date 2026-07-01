@@ -45,6 +45,7 @@ import type {
   ReviewAnalysis,
   Vote,
 } from "@/lib/types";
+import { universityBrain, UNIVERSITY_PROPOSALS, DIVERGENT_TASK } from "@/lib/fixtures/university";
 
 async function log(agent: AgentName, action: string, input: string, output: string, proposalId?: string): Promise<AgentLog> {
   const entry: AgentLog = { id: uuid(), agent, action, input, output, proposalId, timestamp: new Date().toISOString() };
@@ -817,4 +818,149 @@ export async function promoteFeaturePackToProposal(
   );
 
   return { ...result, featurePack: pack };
+}
+
+// ─── Test organisation seed: Metropolitan University ────────────────────────
+// Drives the real pipeline with a fixture that covers edge cases (rejected,
+// needs-discussion, tied votes, duplicates, drift). See src/lib/fixtures.
+
+/** Fixture-only vote — bypasses team role check for university panel members */
+async function seedCastVote(
+  proposalId: string,
+  userId: string,
+  userName: string,
+  vote: Vote["vote"],
+  comment?: string
+): Promise<Proposal> {
+  const proposal = await dbGetProposal(proposalId);
+  if (!proposal) throw new Error("Proposal not found");
+
+  if (!proposal.votes) proposal.votes = [];
+  const idx = proposal.votes.findIndex((v) => v.userId === userId);
+  const entry: Vote = { userId, userName, vote, comment, createdAt: new Date().toISOString() };
+  if (idx >= 0) proposal.votes[idx] = entry;
+  else proposal.votes.push(entry);
+
+  proposal.status = "consensus_pending";
+  proposal.updatedAt = new Date().toISOString();
+  await dbSaveProposal(proposal);
+  await log("consensus", "vote", `${userName}: ${vote}`, comment ?? "", proposalId);
+  return proposal;
+}
+
+export async function seedProject(): Promise<ProjectBrain> {
+  const now = new Date().toISOString();
+  const seed: ProjectBrain = {
+    id: uuid(),
+    name: "E-Commerce Platform",
+    vision: "Build a scalable, maintainable e-commerce platform with clear architectural boundaries",
+    goals: [
+      "Reduce time-to-market for new features",
+      "Maintain shared team understanding of architecture",
+      "Enable safe, reversible engineering decisions",
+    ],
+    architecture: [
+      { id: "1", name: "API Gateway", type: "api", description: "Central API entry point", dependencies: ["Auth Service"] },
+      { id: "2", name: "Auth Service", type: "service", description: "Authentication and authorization", dependencies: ["User DB"] },
+      { id: "3", name: "Product Service", type: "service", description: "Product catalog management", dependencies: ["Product DB", "Search Service"] },
+      { id: "4", name: "Order Service", type: "service", description: "Order processing and fulfillment", dependencies: ["Payment Service", "Inventory Service"] },
+      { id: "5", name: "Payment Service", type: "integration", description: "Stripe payment integration", dependencies: [] },
+      { id: "6", name: "User DB", type: "database", description: "PostgreSQL user data store", dependencies: [] },
+      { id: "7", name: "Product DB", type: "database", description: "PostgreSQL product catalog", dependencies: [] },
+      { id: "8", name: "Search Service", type: "module", description: "Elasticsearch product search", dependencies: [] },
+    ],
+    institutionalMemory: [
+      {
+        id: uuid(),
+        title: "Adopted microservices architecture",
+        content: "Team decided to split monolith into domain-bounded services for independent scaling.",
+        source: "decision",
+        createdAt: new Date(Date.now() - 30 * 86400000).toISOString(),
+      },
+      {
+        id: uuid(),
+        title: "PostgreSQL as primary datastore",
+        content: "Chose PostgreSQL over MongoDB for ACID compliance in order processing.",
+        source: "decision",
+        createdAt: new Date(Date.now() - 20 * 86400000).toISOString(),
+      },
+    ],
+    currentVersion: "1.0.0",
+    createdBy: "mgr-1",
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  await dbSaveProject(seed);
+  await log("project_brain", "seed", "demo", "E-Commerce demo initialized");
+  return seed;
+}
+
+export async function seedUniversity(): Promise<ProjectBrain> {
+  const brain = universityBrain();
+  const now = new Date().toISOString();
+  brain.createdBy = "mgr-1";
+  brain.createdAt = now;
+  brain.updatedAt = now;
+  await dbSaveProject(brain);
+  await log("project_brain", "seed", "university", "Metropolitan University demo initialized");
+
+  for (const spec of UNIVERSITY_PROPOSALS) {
+    const { proposal } = await runProposalPipeline(
+      spec.title,
+      spec.description,
+      spec.author.id,
+      spec.author.name,
+      "main",
+      brain.id
+    );
+
+    for (const v of spec.votes) {
+      await seedCastVote(proposal.id, v.user.id, v.user.name, v.vote, v.comment);
+    }
+
+    if (spec.votes.length) {
+      await tallyVotes(proposal.id);
+    }
+
+    if (spec.finalize === "approve") {
+      const updated = await dbGetProposal(proposal.id);
+      if (updated?.status === "ready_for_manager") {
+        await managerAcceptProposal(proposal.id, "mgr-1");
+      }
+    } else if (spec.finalize === "check") {
+      const updated = await dbGetProposal(proposal.id);
+      if (updated && updated.status === "ready_for_manager" && spec.expectStatus === "rejected") {
+        await managerDeclineProposal(proposal.id, "mgr-1", "Rejected by manager after team review");
+      }
+    }
+  }
+
+  const branches = await dbGetBranches();
+  const branch =
+    branches.find((b) => b.projectId === brain.id) ??
+    ({ id: uuid() } as DecisionBranch);
+
+  const task: ImplementationTask = {
+    id: uuid(),
+    title: DIVERGENT_TASK.title,
+    description: DIVERGENT_TASK.description,
+    status: "pending",
+    branchId: branch.id,
+    affectedComponents: DIVERGENT_TASK.affectedComponents,
+    createdAt: now,
+    updatedAt: now,
+  };
+  await dbSaveTask(task);
+
+  await detectDrift();
+
+  try {
+    const { syncGovernedMemoryRegistry } = await import("@/lib/governance/memory-retrieval");
+    await syncGovernedMemoryRegistry();
+  } catch {
+    /* best-effort */
+  }
+
+  return brain;
 }

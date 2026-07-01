@@ -159,6 +159,43 @@ Verify your provider keys independently of the app:
 npm run test:llm
 ```
 
+## Test Data & Testing
+
+The project ships with a **test organisation** — *Metropolitan University —
+Digital Campus* — and an automated suite that exercises the full pipeline
+including exceptions and edge cases (rejections, tied votes, duplicates, drift,
+unicode/injection inputs, error paths). Full guide: **[docs/TESTING.md](docs/TESTING.md)**.
+
+```bash
+npm run test:scenarios   # 21 pipeline + edge-case assertions (no server needed)
+```
+
+Load the university dataset into the running app to click through it:
+
+```bash
+curl -X POST http://localhost:3000/api/project \
+  -H "Content-Type: application/json" \
+  -d '{"scenario":"university"}'
+# reset to the original demo:  -d '{"scenario":"ecommerce"}'
+```
+
+**Edge cases covered** (see the docs for the full matrix):
+
+| Area | Examples |
+| --- | --- |
+| Consensus | tied 2–2 vote never auto-approves; a single `needs_discussion` blocks approval; rejections win |
+| Versioning | version bumps only on merge; no branch on rejection |
+| Drift | phantom component in a task; >3 open proposals trip the backlog alert |
+| Duplicates | near-duplicate proposal flagged against the original |
+| Bad input | empty/whitespace, 20k-char, unicode/emoji, `<script>` / SQL-injection strings — no crash |
+| Error paths | vote on missing proposal, consensus with no votes, approve a rejected proposal, rollback a missing branch — all throw |
+| Rollback | merge twice, roll back, verify version + architecture restored from snapshot |
+
+**How testing is carried out** — three layers, each one command:
+`npm run test:scenarios` (orchestrator logic + edge cases),
+`npm run test:llm` (provider keys), and curl-based API integration against
+`npm run dev` (see [Testing the APIs](#testing-the-apis) above).
+
 ## Deploy to Vercel
 
 1. Push to GitHub
