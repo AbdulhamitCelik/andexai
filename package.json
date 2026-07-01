@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "db:init": "curl -X POST http://localhost:3000/api/db/init",
     "db:push": "prisma db push",
     "db:seed": "tsx prisma/seed.ts",
     "test:llm": "node --env-file=.env.local scripts/test-llm.mjs"
@@ -16,6 +17,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^0.475.0",
+    "mongoose": "^9.7.3",
     "next": "^15.2.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

@@ -5,59 +5,101 @@ import { AppShell } from "@/components/layout/app-shell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import type { DecisionBranch } from "@/lib/types";
+import { useUser } from "@/lib/context/user-context";
+import type { DecisionBranch, ProjectBrain } from "@/lib/types";
+import Link from "next/link";
+import { GitBranch, Trash2, Merge, Play, Plus } from "lucide-react";
 
 export default function BranchesPage() {
+  const { currentUser, isManager } = useUser();
   const [branches, setBranches] = useState<DecisionBranch[]>([]);
+  const [projects, setProjects] = useState<ProjectBrain[]>([]);
 
-  const load = () => fetch("/api/branches").then((r) => r.json()).then((d) => setBranches(d.branches));
+  const load = () =>
+    fetch("/api/branches")
+      .then((r) => r.json())
+      .then((d) => {
+        setBranches(d.branches);
+        setProjects(d.projects ?? []);
+      });
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+  }, []);
 
-  const rollback = async (branchId: string) => {
-    if (!confirm("Rollback project brain to this decision branch?")) return;
+  const act = async (branchId: string, action: string) => {
     await fetch("/api/branches", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ branchId }),
+      body: JSON.stringify({ branchId, action, managerId: currentUser.id }),
     });
-    alert("Rollback complete. Project brain restored.");
     load();
   };
+
+  const active = branches.filter((b) => ["open", "implementing"].includes(b.status));
+  const projectName = (id: string) => projects.find((p) => p.id === id)?.name ?? "Project";
 
   return (
     <AppShell>
       <div className="p-8 space-y-6">
         <div>
-          <h1 className="text-2xl font-bold">Decision Branches</h1>
-          <p className="text-sm text-muted-foreground">Agent 6 — Version-controlled engineering decisions (like Git branches)</p>
+          <h1 className="text-2xl font-bold">Branches</h1>
+          <p className="text-sm text-muted-foreground">
+            When a manager accepts a suggestion on a project, a branch is created (project + suggestion). The original project is unchanged.
+          </p>
         </div>
 
-        {branches.length === 0 ? (
-          <Card><CardContent className="p-6 text-sm text-muted-foreground">No decision branches yet. Approve a proposal to create one.</CardContent></Card>
-        ) : (
-          branches.map((b) => (
-            <Card key={b.id}>
-              <CardHeader>
-                <div className="flex items-center justify-between">
+        {active.map((b) => (
+          <Card key={b.id}>
+            <CardHeader>
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div>
                   <CardTitle className="text-base font-mono">{b.name}</CardTitle>
-                  <div className="flex gap-2">
-                    <Badge>v{b.version}</Badge>
-                    <Badge variant={b.merged ? "success" : "warning"}>{b.merged ? "merged" : "open"}</Badge>
-                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {projectName(b.projectId)} · from: {b.proposalTitle}
+                  </p>
                 </div>
-              </CardHeader>
-              <CardContent className="flex items-center justify-between">
-                <p className="text-xs text-muted-foreground">
-                  Created {new Date(b.createdAt).toLocaleString()}
-                  {b.mergedAt && ` · Merged ${new Date(b.mergedAt).toLocaleString()}`}
-                </p>
-                {b.merged && (
-                  <Button size="sm" variant="outline" onClick={() => rollback(b.id)}>Rollback to this version</Button>
+                <div className="flex gap-2">
+                  <Badge variant={b.status === "implementing" ? "warning" : "secondary"}>{b.status}</Badge>
+                  <Badge>v{b.version}</Badge>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-xs text-muted-foreground">
+                Project still at v{b.mainVersionAtCreation} · {b.acceptedProposalIds.length} accepted suggestion(s)
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Link href="/proposals">
+                  <Button size="sm" variant="outline"><Plus className="mr-1 h-3 w-3" /> Add suggestion</Button>
+                </Link>
+                {isManager && b.status === "open" && (
+                  <Button size="sm" onClick={() => act(b.id, "start_implementation")}>
+                    <Play className="mr-1 h-3 w-3" /> Start Implementation
+                  </Button>
                 )}
-              </CardContent>
-            </Card>
-          ))
+                {isManager && (
+                  <>
+                    <Button size="sm" variant="outline" onClick={() => act(b.id, "merge_to_main")}>
+                      <Merge className="mr-1 h-3 w-3" /> Merge to Project
+                    </Button>
+                    <Button size="sm" variant="destructive" onClick={() => act(b.id, "discard")}>
+                      <Trash2 className="mr-1 h-3 w-3" /> Discard
+                    </Button>
+                  </>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+
+        {active.length === 0 && (
+          <Card>
+            <CardContent className="p-6 text-sm text-muted-foreground flex items-center gap-2">
+              <GitBranch className="h-4 w-4" />
+              No branches yet. Add a suggestion to a project and have the manager accept it.
+            </CardContent>
+          </Card>
         )}
       </div>
     </AppShell>

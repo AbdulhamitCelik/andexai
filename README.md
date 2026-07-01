@@ -38,7 +38,7 @@ Proposal → Context → Impact → Review → Consensus → Manager Approval
 
 - **Frontend:** Next.js 15, React, TailwindCSS, shadcn/ui
 - **Backend:** Next.js API Routes
-- **Database:** PostgreSQL + Prisma (optional — in-memory store for demo)
+- **Database:** MongoDB Atlas via Mongoose (`MONGODB_URI` in `.env.local`)
 - **Deployment:** Vercel
 
 ## Quick Start
@@ -76,14 +76,19 @@ Full usage guide (client API, HTTP routes, adding providers): **[docs/LLM.md](do
 
 ## API Reference
 
-All endpoints live under `/api` (Next.js route handlers). State is held in an
-in-memory store that **auto-seeds a demo project** on first read, so every
-endpoint works with zero setup.
+All endpoints live under `/api` (Next.js route handlers). State is persisted in
+**MongoDB** — set `MONGODB_URI` in `.env.local`, then run `POST /api/db/init`
+to create indexes.
 
 | Endpoint | Method | What it does |
 | --- | --- | --- |
-| `/api/project` | `GET` | Full dashboard snapshot: project brain, proposals, branches, tasks, agent logs, drift alerts, and stats. Seeds the demo on first call. |
-| `/api/project` | `POST` | Re-seed the demo project and run a drift scan. |
+| `/api/db/init` | `GET` \| `POST` | MongoDB collection/index setup and status hint. |
+| `/api/project/parse` | `POST` | Parse uploaded project brief (manager only). FormData: `file`, `managerId`. |
+| `/api/team` | `GET` | List demo team members (manager + workers). |
+| `/api/project` | `GET` | Dashboard snapshot: projects, proposals, branches, tasks, logs, stats. |
+| `/api/project` | `POST` | Create project (manager). Optional: `functionalRequirements`, `nonFunctionalRequirements`. |
+| `/api/project` | `PATCH` | Update project (manager). |
+| `/api/project/[id]` | `GET` | Single project with related branches and proposals. |
 | `/api/proposals` | `GET` | List all proposals (newest first). |
 | `/api/proposals` | `POST` | Create a proposal and run the pipeline: **context → impact → review**. Body: `{ title, description }`. |
 | `/api/proposals` | `PATCH` | Act on a proposal. Body: `{ proposalId, action, ... }` where `action` is `vote` \| `check_consensus` \| `approve` \| `update_tasks`. `approve` runs the approval pipeline (branch + tasks + merge). |
@@ -91,7 +96,7 @@ endpoint works with zero setup.
 | `/api/branches` | `GET` | List decision branches (version history). |
 | `/api/branches` | `POST` | Roll the project brain back to a branch snapshot. Body: `{ branchId }`. |
 | `/api/tasks` | `GET` | List implementation tasks. |
-| `/api/agents` | `GET` | Full agent activity log (auditable trail of every agent action). |
+| `/api/agents` | `GET` | Agent activity log plus full skill catalog (`skills` in JSON). |
 | `/api/drift` | `GET` | Current mental-model drift alerts. |
 | `/api/drift` | `POST` | Run a drift scan and return new alerts. |
 | `/api/llm` | `GET` | LLM provider status (which keys are configured — never returns keys). |

@@ -1,81 +1,199 @@
 import { v4 as uuid } from "uuid";
+import { canManage, canVote, getTeamMember } from "@/lib/auth/team";
+import {
+  dbGetProjects,
+  dbGetProject,
+  dbSaveProject,
+  dbGetProposals,
+  dbGetProposal,
+  dbSaveProposal,
+  dbGetBranches,
+  dbGetBranch,
+  dbSaveBranch,
+  dbGetTasks,
+  dbSaveTask,
+  dbSaveTasks,
+  dbSaveAgentLog,
+  dbGetAgentLogs,
+  dbSaveDriftAlerts,
+  dbGetDriftAlerts,
+  dbSaveFeedbackItems,
+  dbGetFeedbackItems,
+  dbSaveFeaturePacks,
+  dbGetFeaturePacks,
+  dbGetFeaturePack,
+  dbSaveFeaturePack,
+  dbClearDiscoveryForProject,
+} from "@/lib/db/repository";
+import { runProductDiscoveryAgent, featurePackToProposalText } from "@/lib/agents/product-discovery";
+import { getMockFeedback } from "@/lib/discovery/mock-feedback";
 import type {
   AgentLog,
   AgentName,
   DecisionBranch,
+  DiscoveryResult,
   DriftAlert,
+  FeaturePack,
+  FeedbackItem,
   ImpactAnalysis,
   ImplementationTask,
   PipelineResult,
   ProjectBrain,
   Proposal,
   ProposalContext,
+  ProposalTarget,
   ReviewAnalysis,
   Vote,
 } from "@/lib/types";
 
-// In-memory store for demo / when DATABASE_URL is unavailable on Vercel preview
-class InMemoryStore {
-  project: ProjectBrain | null = null;
-  proposals: Proposal[] = [];
-  branches: DecisionBranch[] = [];
-  tasks: ImplementationTask[] = [];
-  logs: AgentLog[] = [];
-  driftAlerts: DriftAlert[] = [];
-
-  reset(seed: ProjectBrain) {
-    this.project = seed;
-    this.proposals = [];
-    this.branches = [];
-    this.tasks = [];
-    this.logs = [];
-    this.driftAlerts = [];
-  }
-}
-
-export const store = new InMemoryStore();
-
-function log(
-  agent: AgentName,
-  action: string,
-  input: string,
-  output: string,
-  proposalId?: string
-): AgentLog {
-  const entry: AgentLog = {
-    id: uuid(),
-    agent,
-    action,
-    input,
-    output,
-    proposalId,
-    timestamp: new Date().toISOString(),
-  };
-  store.logs.push(entry);
+async function log(agent: AgentName, action: string, input: string, output: string, proposalId?: string): Promise<AgentLog> {
+  const entry: AgentLog = { id: uuid(), agent, action, input, output, proposalId, timestamp: new Date().toISOString() };
+  await dbSaveAgentLog(entry);
   return entry;
 }
 
-// ─── Agent 1: Project Brain ───────────────────────────────────────────────
-
-export function getProjectBrain(): ProjectBrain | null {
-  return store.project;
+async function getProjectById(projectId: string): Promise<ProjectBrain> {
+  const project = await dbGetProject(projectId);
+  if (!project) throw new Error("Project not found");
+  return project;
 }
 
-export function updateProjectBrain(updates: Partial<ProjectBrain>): ProjectBrain {
-  if (!store.project) throw new Error("Project not initialized");
-  store.project = { ...store.project, ...updates, updatedAt: new Date().toISOString() };
-  log("project_brain", "update", JSON.stringify(updates), "Project brain updated");
-  return store.project;
+async function getTargetBrain(proposal: Proposal): Promise<ProjectBrain> {
+  if (proposal.targetType === "branch" && proposal.targetBranchId) {
+    const branch = await dbGetBranch(proposal.targetBranchId);
+    if (!branch) throw new Error("Target branch not found");
+    return branch.mergedBrain;
+  }
+  if (!proposal.targetProjectId) throw new Error("Target project not set");
+  return getProjectById(proposal.targetProjectId);
 }
 
-// ─── Agent 2: Proposal Agent ──────────────────────────────────────────────
+async function getTargetLabel(proposal: Proposal): Promise<string> {
+  if (proposal.targetType === "branch" && proposal.targetBranchId) {
+    const branch = await dbGetBranch(proposal.targetBranchId);
+    const project = branch ? await dbGetProject(branch.projectId) : null;
+    return project ? `${project.name} → ${branch?.name}` : `branch "${branch?.name}"`;
+  }
+  const project = proposal.targetProjectId ? await dbGetProject(proposal.targetProjectId) : null;
+  return project ? `project "${project.name}"` : "main idea";
+}
 
-export function createProposal(
+function mergeProposalIntoBrain(base: ProjectBrain, proposal: Proposal): ProjectBrain {
+  const merged = JSON.parse(JSON.stringify(base)) as ProjectBrain;
+  const versionParts = merged.currentVersion.split(".").map(Number);
+  versionParts[2] += 1;
+  merged.currentVersion = versionParts.join(".");
+  merged.institutionalMemory.push({
+    id: uuid(),
+    title: proposal.title,
+    content: proposal.description,
+    source: "proposal",
+    decisionId: proposal.id,
+    createdAt: new Date().toISOString(),
+  });
+  merged.goals = [...merged.goals, `Add: ${proposal.title}`];
+  merged.updatedAt = new Date().toISOString();
+  return merged;
+}
+
+// ─── Projects ────────────────────────────────────────────────────────────────
+
+export async function getProjects(): Promise<ProjectBrain[]> {
+  return dbGetProjects();
+}
+
+export async function getProject(projectId: string): Promise<ProjectBrain | undefined> {
+  return dbGetProject(projectId);
+}
+
+export async function getMainIdea(): Promise<ProjectBrain | null> {
+  const projects = await dbGetProjects();
+  return projects[0] ?? null;
+}
+
+export async function getProjectBrain(): Promise<ProjectBrain | null> {
+  return getMainIdea();
+}
+
+export async function createProject(
+  managerId: string,
+  name: string,
+  vision: string,
+  goals: string[] = [],
+  functionalRequirements: string[] = [],
+  nonFunctionalRequirements: string[] = []
+): Promise<ProjectBrain> {
+  const manager = getTeamMember(managerId);
+  if (!manager || !canManage(manager.role)) throw new Error("Only managers can create projects");
+
+  const project: ProjectBrain = {
+    id: uuid(),
+    name,
+    vision,
+    goals: goals.length ? goals : ["Deliver the project vision"],
+    functionalRequirements,
+    nonFunctionalRequirements,
+    architecture: [],
+    institutionalMemory: [],
+    currentVersion: "1.0.0",
+    createdBy: managerId,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+
+  await dbSaveProject(project);
+  await log("project_brain", "create", name, "Project created by manager");
+  return project;
+}
+
+export async function updateProject(
+  managerId: string,
+  projectId: string,
+  updates: {
+    name?: string;
+    vision?: string;
+    goals?: string[];
+    functionalRequirements?: string[];
+    nonFunctionalRequirements?: string[];
+  }
+): Promise<ProjectBrain> {
+  const manager = getTeamMember(managerId);
+  if (!manager || !canManage(manager.role)) throw new Error("Only managers can edit projects");
+
+  const project = await getProjectById(projectId);
+  const updated = { ...project, ...updates, updatedAt: new Date().toISOString() };
+  await dbSaveProject(updated);
+  await log("project_brain", "update", projectId, "Project updated by manager");
+  return updated;
+}
+
+// ─── Proposals ───────────────────────────────────────────────────────────────
+
+export async function createProposal(
   title: string,
   description: string,
   authorId: string,
-  authorName: string
-): Proposal {
+  authorName: string,
+  targetType: ProposalTarget,
+  targetProjectId?: string,
+  targetBranchId?: string
+): Promise<Proposal> {
+  let projectId: string;
+
+  if (targetType === "main") {
+    if (!targetProjectId) throw new Error("targetProjectId required when adding to a project");
+    await getProjectById(targetProjectId);
+    projectId = targetProjectId;
+  } else {
+    if (!targetBranchId) throw new Error("targetBranchId required for branch suggestions");
+    const branch = await dbGetBranch(targetBranchId);
+    if (!branch) throw new Error("Branch not found");
+    if (!["open", "implementing"].includes(branch.status)) {
+      throw new Error("Can only add suggestions to open or implementing branches");
+    }
+    projectId = branch.projectId;
+  }
+
   const proposal: Proposal = {
     id: uuid(),
     title,
@@ -83,269 +201,404 @@ export function createProposal(
     authorId,
     authorName,
     status: "draft",
+    targetType,
+    targetProjectId: targetType === "main" ? targetProjectId : undefined,
+    targetBranchId: targetType === "branch" ? targetBranchId : undefined,
+    projectId,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
-  store.proposals.push(proposal);
-  log("proposal", "create", title, `Proposal created: ${proposal.id}`, proposal.id);
+  await dbSaveProposal(proposal);
+  const label = await getTargetLabel(proposal);
+  await log("proposal", "create", title, `Suggestion for ${label}`, proposal.id);
   return proposal;
 }
 
-export function gatherContext(proposal: Proposal): ProposalContext {
-  const brain = store.project;
-  const relatedDecisions = store.proposals
-    .filter((p) => p.status === "merged" && p.id !== proposal.id)
+async function gatherContext(proposal: Proposal): Promise<ProposalContext> {
+  const targetLabel = await getTargetLabel(proposal);
+  const targetBrain = await getTargetBrain(proposal);
+  const allProposals = await dbGetProposals({ projectId: proposal.projectId });
+
+  const relatedDecisions = allProposals
+    .filter((p) => p.status === "accepted" && p.id !== proposal.id)
     .slice(-5)
-    .map((p) => `${p.title} (${p.id.slice(0, 8)})`);
+    .map((p) => p.title);
 
   const keywords = proposal.description.toLowerCase().split(/\s+/);
-  const relatedArchitecture =
-    brain?.architecture
-      .filter((a) => keywords.some((k) => a.name.toLowerCase().includes(k) || a.description.toLowerCase().includes(k)))
-      .map((a) => a.name) ?? [];
+  const relatedArchitecture = targetBrain.architecture
+    .filter((a) => keywords.some((k) => a.name.toLowerCase().includes(k) || a.description.toLowerCase().includes(k)))
+    .map((a) => a.name);
 
-  const duplicates = store.proposals
-    .filter(
-      (p) =>
-        p.id !== proposal.id &&
-        p.status !== "rejected" &&
-        p.title.toLowerCase().includes(proposal.title.toLowerCase().slice(0, 10))
-    )
+  const duplicates = allProposals
+    .filter((p) => p.id !== proposal.id && !["rejected", "archived"].includes(p.status))
+    .filter((p) => p.title.toLowerCase().slice(0, 12) === proposal.title.toLowerCase().slice(0, 12))
     .map((p) => p.title);
 
   const context: ProposalContext = {
     relatedDecisions,
     relatedArchitecture,
     duplicates,
-    summary: `Retrieved ${relatedDecisions.length} prior decisions and ${relatedArchitecture.length} architecture components relevant to "${proposal.title}".`,
+    targetLabel,
+    summary: `Suggestion for ${targetLabel}. Compared against "${targetBrain.name}" — ${relatedArchitecture.length} components may be affected.`,
   };
 
   proposal.context = context;
   proposal.status = "context_gathered";
   proposal.updatedAt = new Date().toISOString();
-  log("proposal", "gather_context", proposal.title, context.summary, proposal.id);
+  await dbSaveProposal(proposal);
+  await log("proposal", "gather_context", proposal.title, context.summary, proposal.id);
   return context;
 }
 
-// ─── Agent 3: Impact Agent ────────────────────────────────────────────────
+async function analyzeImpact(proposal: Proposal): Promise<ImpactAnalysis> {
+  const targetBrain = await getTargetBrain(proposal);
+  const targetLabel = await getTargetLabel(proposal);
+  const arch = targetBrain.architecture;
 
-export function analyzeImpact(proposal: Proposal): ImpactAnalysis {
-  const brain = store.project;
-  const arch = brain?.architecture ?? [];
-
-  const affected = arch.filter((a) =>
-    proposal.description.toLowerCase().includes(a.name.toLowerCase()) ||
-    proposal.title.toLowerCase().includes(a.type)
+  const affected = arch.filter(
+    (a) =>
+      proposal.description.toLowerCase().includes(a.name.toLowerCase()) ||
+      proposal.title.toLowerCase().includes(a.type)
   );
 
-  const dependencyImpact = affected.flatMap((a) =>
-    a.dependencies.map((dep) => ({
-      target: dep,
-      severity: "medium" as const,
-      description: `Dependency of ${a.name} may require updates`,
-    }))
-  );
-
-  const architectureImpact = affected.map((a) => ({
-    target: a.name,
-    severity: "high" as const,
-    description: `Direct architecture component affected by proposal`,
-  }));
-
-  const apiImpact = affected
-    .filter((a) => a.type === "api")
-    .map((a) => ({
-      target: a.name,
-      severity: "medium" as const,
-      description: `API contract may need versioning`,
-    }));
-
-  const existingTasks = store.tasks.filter((t) => t.status !== "completed");
-  const taskImpact = existingTasks.slice(0, 3).map((t) => ({
-    target: t.title,
-    severity: "low" as const,
-    description: `Existing task may need scope adjustment`,
-  }));
+  const branch = proposal.targetBranchId ? await dbGetBranch(proposal.targetBranchId) : null;
+  const allTasks = branch ? await dbGetTasks(branch.id) : [];
+  const existingTasks = allTasks.filter((t) => !["completed", "cancelled"].includes(t.status));
 
   const impact: ImpactAnalysis = {
-    dependencyImpact,
-    architectureImpact,
-    apiImpact,
-    taskImpact,
+    dependencyImpact: affected.flatMap((a) =>
+      a.dependencies.map((dep) => ({ target: dep, severity: "medium" as const, description: `Dependency of ${a.name} may need updates` }))
+    ),
+    architectureImpact: affected.map((a) => ({
+      target: a.name,
+      severity: "high" as const,
+      description: `Component in ${targetLabel} affected`,
+    })),
+    apiImpact: affected
+      .filter((a) => a.type === "api")
+      .map((a) => ({ target: a.name, severity: "medium" as const, description: "API contract may need versioning" })),
+    taskImpact: existingTasks.slice(0, 3).map((t) => ({
+      target: t.title,
+      severity: "low" as const,
+      description: branch?.status === "implementing" ? "Implementation task scope may change" : "Future task may be affected",
+    })),
     costEstimate: affected.length > 2 ? "2-3 engineering weeks" : "3-5 engineering days",
     riskLevel: affected.length > 2 ? "high" : affected.length > 0 ? "medium" : "low",
-    summary: `Impact analysis complete. ${affected.length} architecture components affected.`,
+    summary: `How "${proposal.title}" affects ${targetLabel}: ${affected.length} components impacted.${
+      branch?.status === "implementing" ? " Active implementation may need updating." : ""
+    }`,
   };
 
   proposal.impact = impact;
   proposal.status = "impact_analyzed";
   proposal.updatedAt = new Date().toISOString();
-  log("impact", "analyze", proposal.title, impact.summary, proposal.id);
+  await dbSaveProposal(proposal);
+  await log("impact", "analyze", proposal.title, impact.summary, proposal.id);
   return impact;
 }
 
-// ─── Agent 4: Review Agent ──────────────────────────────────────────────────
+async function generateReview(proposal: Proposal): Promise<ReviewAnalysis> {
+  const targetBrain = await getTargetBrain(proposal);
+  const targetLabel = await getTargetLabel(proposal);
+  const branch = proposal.targetBranchId ? await dbGetBranch(proposal.targetBranchId) : null;
 
-export function generateReview(proposal: Proposal): ReviewAnalysis {
+  const pros = [
+    `Strengthens ${targetLabel}: ${proposal.title}`,
+    `Aligns with vision: ${targetBrain.vision.slice(0, 90)}...`,
+    proposal.impact?.riskLevel === "low" ? "Low-risk addition" : "Manageable impact with clear trade-offs",
+  ];
+
+  const cons = [
+    proposal.impact?.riskLevel === "high"
+      ? `Could significantly change how the team understands ${targetLabel}`
+      : `Adds scope on top of ${targetLabel}`,
+    branch?.status === "implementing"
+      ? "May disrupt in-progress implementation tasks"
+      : "Requires team alignment before committing",
+  ];
+
   const review: ReviewAnalysis = {
-    pros: [
-      `Addresses a clear engineering need: ${proposal.title}`,
-      "Aligns with project vision and institutional knowledge",
-      proposal.impact?.riskLevel === "low" ? "Low risk implementation path" : "Well-scoped change with manageable risk",
-    ],
-    cons: [
-      proposal.impact?.riskLevel === "high" ? "High blast radius across multiple components" : "Requires coordination across team members",
-      "Adds complexity to the current architecture",
-    ],
+    pros,
+    cons,
     risks: [
-      ...(proposal.impact?.dependencyImpact.length ? ["Downstream dependency breakage"] : []),
-      "Team mental model may diverge during implementation",
-      "Rollback complexity if consensus changes",
+      ...(proposal.impact?.dependencyImpact.length ? ["Downstream dependencies may break"] : []),
+      "Team understanding may drift if not discussed",
     ],
-    tradeoffs: [
-      "Speed of delivery vs. architectural purity",
-      "Incremental change vs. comprehensive refactor",
-    ],
+    tradeoffs: ["Stability vs. evolution", "Speed vs. thorough review"],
     questions: [
-      "Have all affected stakeholders been identified?",
-      "Is there an existing decision that conflicts with this proposal?",
-      "What is the rollback strategy if implementation fails?",
+      `Does this make ${targetLabel} stronger?`,
+      "Are all affected team members aware?",
+      proposal.targetBranchId ? "How does this affect current implementation?" : "Should this go on a branch first?",
     ],
-    suggestedReviewers: ["Tech Lead", "Backend Engineer", "Frontend Engineer", "Engineering Manager"],
+    suggestedReviewers: ["Tech Lead", "Backend Engineer", "Frontend Engineer"],
+    teamSummary: `Team summary for "${proposal.title}": ${pros.length} pros and ${cons.length} cons for ${targetLabel}. ${pros[0]}. Main concern: ${cons[0]}. Workers vote; manager accepts or declines.`,
   };
 
   proposal.review = review;
   proposal.status = "under_review";
   proposal.updatedAt = new Date().toISOString();
-  log("review", "generate", proposal.title, `Generated ${review.pros.length} pros, ${review.cons.length} cons`, proposal.id);
+  await dbSaveProposal(proposal);
+  await log("review", "generate", proposal.title, review.teamSummary, proposal.id);
   return review;
 }
 
-// ─── Agent 5: Consensus Agent ───────────────────────────────────────────────
+// ─── Voting ──────────────────────────────────────────────────────────────────
 
-export function castVote(
+export async function castVote(
   proposalId: string,
   userId: string,
   userName: string,
   vote: Vote["vote"],
   comment?: string
-): Proposal {
-  const proposal = store.proposals.find((p) => p.id === proposalId);
+): Promise<Proposal> {
+  const member = getTeamMember(userId);
+  if (!member || !canVote(member.role)) throw new Error("Only workers can vote on suggestions");
+
+  const proposal = await dbGetProposal(proposalId);
   if (!proposal) throw new Error("Proposal not found");
+  if (!["under_review", "consensus_pending", "ready_for_manager", "needs_discussion"].includes(proposal.status)) {
+    throw new Error("This suggestion is not open for voting");
+  }
 
   if (!proposal.votes) proposal.votes = [];
-  const existing = proposal.votes.findIndex((v) => v.userId === userId);
-  const voteEntry: Vote = { userId, userName, vote, comment, createdAt: new Date().toISOString() };
-
-  if (existing >= 0) proposal.votes[existing] = voteEntry;
-  else proposal.votes.push(voteEntry);
+  const idx = proposal.votes.findIndex((v) => v.userId === userId);
+  const entry: Vote = { userId, userName, vote, comment, createdAt: new Date().toISOString() };
+  if (idx >= 0) proposal.votes[idx] = entry;
+  else proposal.votes.push(entry);
 
   proposal.status = "consensus_pending";
   proposal.updatedAt = new Date().toISOString();
-  log("consensus", "vote", `${userName}: ${vote}`, comment ?? "", proposalId);
+  await dbSaveProposal(proposal);
+  await log("consensus", "vote", `${userName}: ${vote}`, comment ?? "", proposalId);
   return proposal;
 }
 
-export function checkConsensus(proposalId: string): Proposal {
-  const proposal = store.proposals.find((p) => p.id === proposalId);
+export async function tallyVotes(proposalId: string): Promise<Proposal> {
+  const proposal = await dbGetProposal(proposalId);
   if (!proposal?.votes?.length) throw new Error("No votes recorded");
 
   const approvals = proposal.votes.filter((v) => v.vote === "approve" || v.vote === "approve_with_comments").length;
   const rejections = proposal.votes.filter((v) => v.vote === "reject").length;
-  const discussions = proposal.votes.filter((v) => v.vote === "needs_discussion").length;
 
-  if (rejections > approvals) proposal.status = "rejected";
-  else if (discussions > 0) proposal.status = "needs_discussion";
-  else if (approvals >= Math.ceil(proposal.votes.length * 0.6)) proposal.status = "approved";
-  else proposal.status = "consensus_pending";
-
+  proposal.status = rejections > approvals ? "needs_discussion" : "ready_for_manager";
   proposal.updatedAt = new Date().toISOString();
-  log("consensus", "check", proposalId, `Status: ${proposal.status}`, proposalId);
+  await dbSaveProposal(proposal);
+  await log("consensus", "tally", proposalId, `Ready for manager — ${approvals} approve, ${rejections} reject`, proposalId);
   return proposal;
 }
 
-// ─── Agent 6: Branch Agent ──────────────────────────────────────────────────
+// ─── Manager decisions ───────────────────────────────────────────────────────
 
-export function createDecisionBranch(proposal: Proposal): DecisionBranch {
-  const brain = store.project;
-  if (!brain) throw new Error("Project brain not initialized");
+export async function managerAcceptProposal(proposalId: string, managerId: string, note?: string): Promise<PipelineResult> {
+  const manager = getTeamMember(managerId);
+  if (!manager || !canManage(manager.role)) throw new Error("Only managers can accept or decline suggestions");
 
-  const versionParts = brain.currentVersion.split(".").map(Number);
-  versionParts[2] += 1;
-  const newVersion = versionParts.join(".");
+  const proposal = await dbGetProposal(proposalId);
+  if (!proposal) throw new Error("Proposal not found");
+
+  proposal.managerDecision = "accepted";
+  proposal.managerNote = note;
+  proposal.status = "accepted";
+  proposal.updatedAt = new Date().toISOString();
+  await dbSaveProposal(proposal);
+
+  if (proposal.targetType === "main") {
+    const branch = await createDecisionBranch(proposal);
+    const logs = (await dbGetAgentLogs()).filter((l) => l.proposalId === proposalId);
+    return { proposal, logs, branch };
+  }
+
+  const branch = await dbGetBranch(proposal.targetBranchId!);
+  if (!branch) throw new Error("Target branch not found");
+
+  branch.mergedBrain = mergeProposalIntoBrain(branch.mergedBrain, proposal);
+  branch.version = branch.mergedBrain.currentVersion;
+  branch.acceptedProposalIds.push(proposal.id);
+  proposal.branchId = branch.id;
+  await dbSaveBranch(branch);
+  await dbSaveProposal(proposal);
+
+  let tasks: ImplementationTask[] = [];
+  if (branch.status === "implementing") {
+    tasks = await applyRequirementChangeDuringImplementation(proposal, branch);
+  }
+
+  await log("branch", "add_suggestion", proposal.title, `Added to ${branch.name}. Project unchanged.`, proposal.id);
+  const logs = (await dbGetAgentLogs()).filter((l) => l.proposalId === proposalId);
+  return { proposal, logs, branch, tasks };
+}
+
+export async function managerDeclineProposal(proposalId: string, managerId: string, note?: string): Promise<Proposal> {
+  const manager = getTeamMember(managerId);
+  if (!manager || !canManage(manager.role)) throw new Error("Only managers can accept or decline suggestions");
+
+  const proposal = await dbGetProposal(proposalId);
+  if (!proposal) throw new Error("Proposal not found");
+
+  proposal.managerDecision = "declined";
+  proposal.managerNote = note;
+  proposal.status = "rejected";
+  proposal.updatedAt = new Date().toISOString();
+  await dbSaveProposal(proposal);
+  await log("consensus", "decline", proposal.title, note ?? "Declined by manager", proposalId);
+  return proposal;
+}
+
+// ─── Branches ────────────────────────────────────────────────────────────────
+
+async function createDecisionBranch(proposal: Proposal): Promise<DecisionBranch> {
+  const project = await getProjectById(proposal.targetProjectId!);
+  const mergedBrain = mergeProposalIntoBrain(project, proposal);
 
   const branch: DecisionBranch = {
     id: uuid(),
-    name: `decision/${proposal.title.toLowerCase().replace(/\s+/g, "-").slice(0, 30)}`,
-    proposalId: proposal.id,
-    parentBranchId: store.branches.find((b) => b.merged)?.id,
-    version: newVersion,
-    merged: false,
-    snapshot: JSON.parse(JSON.stringify(brain)),
+    projectId: project.id,
+    name: `branch/${proposal.title.toLowerCase().replace(/\s+/g, "-").slice(0, 28)}`,
+    seedProposalId: proposal.id,
+    proposalTitle: proposal.title,
+    status: "open",
+    version: mergedBrain.currentVersion,
+    mainVersionAtCreation: project.currentVersion,
+    mergedBrain,
+    acceptedProposalIds: [proposal.id],
     createdAt: new Date().toISOString(),
   };
 
-  store.branches.push(branch);
+  await dbSaveBranch(branch);
   proposal.branchId = branch.id;
-  proposal.updatedAt = new Date().toISOString();
-  log("branch", "create", proposal.title, `Branch ${branch.name} at v${newVersion}`, proposal.id);
+  await dbSaveProposal(proposal);
+  await log("branch", "create", proposal.title, `Branch for "${project.name}" — project v${project.currentVersion} unchanged.`, proposal.id);
   return branch;
 }
 
-export function mergeDecisionBranch(branchId: string): DecisionBranch {
-  const branch = store.branches.find((b) => b.id === branchId);
-  if (!branch) throw new Error("Branch not found");
+export async function startBranchImplementation(branchId: string, managerId: string): Promise<ImplementationTask[]> {
+  const manager = getTeamMember(managerId);
+  if (!manager || !canManage(manager.role)) throw new Error("Only managers can start implementation");
 
-  branch.merged = true;
+  const branch = await dbGetBranch(branchId);
+  if (!branch) throw new Error("Branch not found");
+  if (branch.status !== "open") throw new Error("Branch is not in collecting phase");
+
+  const existingTasks = await dbGetTasks(branchId);
+  if (existingTasks.some((t) => t.status !== "cancelled")) {
+    throw new Error("Implementation already started for this branch");
+  }
+
+  branch.status = "implementing";
+  branch.implementingAt = new Date().toISOString();
+  await dbSaveBranch(branch);
+
+  const allProposals = await dbGetProposals();
+  const acceptedProposals = allProposals.filter((p) => branch.acceptedProposalIds.includes(p.id));
+  const allTasks: ImplementationTask[] = [];
+  for (const p of acceptedProposals) {
+    allTasks.push(...(await generateImplementationTasks(p, branch)));
+  }
+
+  await log("implementation", "start", branch.name, `${allTasks.length} sub-tasks created`, branch.seedProposalId);
+  return allTasks;
+}
+
+export async function mergeBranchToMain(branchId: string, managerId: string): Promise<DecisionBranch> {
+  const manager = getTeamMember(managerId);
+  if (!manager || !canManage(manager.role)) throw new Error("Only managers can merge to main");
+
+  const branch = await dbGetBranch(branchId);
+  if (!branch) throw new Error("Branch not found");
+  if (!["open", "implementing"].includes(branch.status)) throw new Error("Branch cannot be merged");
+
+  await dbSaveProject(JSON.parse(JSON.stringify(branch.mergedBrain)));
+  branch.status = "merged_to_main";
   branch.mergedAt = new Date().toISOString();
-
-  const proposal = store.proposals.find((p) => p.id === branch.proposalId);
-  if (proposal) {
-    proposal.status = "merged";
-    proposal.updatedAt = new Date().toISOString();
-  }
-
-  if (store.project) {
-    store.project.currentVersion = branch.version;
-    store.project.institutionalMemory.push({
-      id: uuid(),
-      title: proposal?.title ?? "Decision",
-      content: proposal?.description ?? "",
-      source: "decision",
-      decisionId: branch.id,
-      createdAt: new Date().toISOString(),
-    });
-    store.project.updatedAt = new Date().toISOString();
-  }
-
-  log("branch", "merge", branch.name, `Merged at v${branch.version}`, proposal?.id);
+  await dbSaveBranch(branch);
+  await log("branch", "merge_to_main", branch.name, `Project updated to v${branch.version}`, branch.seedProposalId);
   return branch;
 }
 
-export function rollbackToBranch(branchId: string): ProjectBrain {
-  const branch = store.branches.find((b) => b.id === branchId);
-  if (!branch) throw new Error("Branch not found");
+export async function discardBranch(branchId: string, managerId: string): Promise<DecisionBranch> {
+  const manager = getTeamMember(managerId);
+  if (!manager || !canManage(manager.role)) throw new Error("Only managers can discard branches");
 
-  store.project = JSON.parse(JSON.stringify(branch.snapshot));
-  log("branch", "rollback", branch.name, `Rolled back to v${branch.version}`, branch.proposalId);
-  return store.project!;
+  const branch = await dbGetBranch(branchId);
+  if (!branch) throw new Error("Branch not found");
+  if (!["open", "implementing"].includes(branch.status)) throw new Error("Branch cannot be discarded");
+
+  branch.status = "discarded";
+  branch.discardedAt = new Date().toISOString();
+  await dbSaveBranch(branch);
+
+  const project = await dbGetProject(branch.projectId);
+  const tasks = await dbGetTasks(branchId);
+  for (const task of tasks) {
+    if (["pending", "in_progress"].includes(task.status)) {
+      task.status = "cancelled";
+      task.updatedAt = new Date().toISOString();
+      await dbSaveTask(task);
+    }
+  }
+
+  await log("branch", "discard", branch.name, `Discarded. Project "${project?.name}" remains v${project?.currentVersion}.`, branch.seedProposalId);
+  return branch;
 }
 
-// ─── Agent 7: Implementation Agent ──────────────────────────────────────────
+export async function getBranch(branchId: string): Promise<DecisionBranch | undefined> {
+  return dbGetBranch(branchId);
+}
 
-export function generateImplementationTasks(proposal: Proposal, branch: DecisionBranch): ImplementationTask[] {
+export async function getOpenBranches(projectId?: string): Promise<DecisionBranch[]> {
+  const branches = await dbGetBranches();
+  return branches.filter(
+    (b) => ["open", "implementing"].includes(b.status) && (!projectId || b.projectId === projectId)
+  );
+}
+
+export async function getBranchesForProject(projectId: string): Promise<DecisionBranch[]> {
+  const branches = await dbGetBranches();
+  return branches.filter((b) => b.projectId === projectId);
+}
+
+// ─── Implementation ──────────────────────────────────────────────────────────
+
+async function generateImplementationTasks(proposal: Proposal, branch: DecisionBranch): Promise<ImplementationTask[]> {
   const affected = proposal.impact?.architectureImpact.map((i) => i.target) ?? [];
-  const baseTasks = [
-    { title: `Design: ${proposal.title}`, desc: "Create technical design document aligned with approved decision" },
-    { title: `Implement: ${proposal.title}`, desc: "Core implementation work" },
-    { title: `Test: ${proposal.title}`, desc: "Integration and regression testing" },
-    { title: `Document: ${proposal.title}`, desc: "Update project brain and institutional memory" },
-  ];
+  const reviewNotes = proposal.review?.pros?.length
+    ? `\nTeam review highlights:\n- ${proposal.review.pros.join("\n- ")}`
+    : "";
 
-  const tasks: ImplementationTask[] = baseTasks.map((t) => ({
+  const descParts = proposal.description
+    .split(/[.\n]/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 8);
+
+  const steps =
+    descParts.length >= 2
+      ? descParts.slice(0, 5).map((part, i) => ({
+          title: `${proposal.title} — step ${i + 1}`,
+          desc: `${part}.${reviewNotes && i === 0 ? reviewNotes : ""}`,
+        }))
+      : [
+          {
+            title: `Design: ${proposal.title}`,
+            desc: `Design solution for accepted suggestion:\n${proposal.description}${reviewNotes}`,
+          },
+          {
+            title: `Implement: ${proposal.title}`,
+            desc: `Build per suggestion scope:\n${proposal.description}`,
+          },
+          {
+            title: `Validate: ${proposal.title}`,
+            desc: `Test and verify: ${proposal.description}`,
+          },
+          {
+            title: `Document: ${proposal.title}`,
+            desc: `Update branch knowledge for: ${proposal.title}`,
+          },
+        ];
+
+  const tasks: ImplementationTask[] = steps.map((s) => ({
     id: uuid(),
-    title: t.title,
-    description: t.desc,
+    title: s.title,
+    description: s.desc,
     status: "pending",
     branchId: branch.id,
     proposalId: proposal.id,
@@ -354,177 +607,214 @@ export function generateImplementationTasks(proposal: Proposal, branch: Decision
     updatedAt: new Date().toISOString(),
   }));
 
-  store.tasks.push(...tasks);
-  log("implementation", "generate_tasks", proposal.title, `Generated ${tasks.length} tasks`, proposal.id);
+  await dbSaveTasks(tasks);
   return tasks;
 }
 
-export function updateAffectedTasks(proposal: Proposal): ImplementationTask[] {
+async function applyRequirementChangeDuringImplementation(
+  proposal: Proposal,
+  branch: DecisionBranch
+): Promise<ImplementationTask[]> {
+  const updated = await updateAffectedTasks(proposal, branch.id);
+  const newTasks = await generateImplementationTasks(proposal, branch);
+  await log("implementation", "requirements_changed", proposal.title, `${updated.length} updated, ${newTasks.length} new tasks`, proposal.id);
+  return [...updated, ...newTasks];
+}
+
+async function updateAffectedTasks(proposal: Proposal, branchId: string): Promise<ImplementationTask[]> {
   const affected = new Set(proposal.impact?.architectureImpact.map((i) => i.target) ?? []);
   const updated: ImplementationTask[] = [];
+  const tasks = await dbGetTasks(branchId);
 
-  for (const task of store.tasks) {
-    const overlap = task.affectedComponents.some((c) => affected.has(c));
-    if (overlap && task.status === "pending") {
-      task.description += ` [Updated by proposal: ${proposal.title}]`;
-      task.proposalId = proposal.id;
+  for (const task of tasks) {
+    const overlap = task.affectedComponents.some((c) => affected.has(c)) || task.proposalId === proposal.id;
+    if (overlap && ["pending", "in_progress"].includes(task.status)) {
+      task.description += ` [Requirements updated: ${proposal.title}]`;
+      if (task.status === "pending") task.status = "blocked";
       task.updatedAt = new Date().toISOString();
+      await dbSaveTask(task);
       updated.push(task);
     }
   }
-
-  log("implementation", "update_affected", proposal.title, `Updated ${updated.length} tasks (others unchanged)`, proposal.id);
   return updated;
 }
 
-// ─── Agent 8: Communication Agent ───────────────────────────────────────────
-
-export function sendNotification(
-  channel: "slack" | "discord" | "github" | "email",
-  message: string,
-  proposalId?: string
-): void {
-  log("communication", `notify_${channel}`, message, `Notification queued for ${channel}`, proposalId);
-}
-
-// ─── Optional: Drift Detection Agent ────────────────────────────────────────
-
-export function detectDrift(): DriftAlert[] {
+export async function detectDrift(): Promise<DriftAlert[]> {
   const alerts: DriftAlert[] = [];
-  const brain = store.project;
-  if (!brain) return alerts;
+  const branches = await dbGetBranches();
+  const proposals = await dbGetProposals();
 
-  const pendingTasks = store.tasks.filter((t) => t.status === "pending");
-  const brainComponents = new Set(brain.architecture.map((a) => a.name));
-
-  for (const task of pendingTasks) {
-    for (const comp of task.affectedComponents) {
-      if (!brainComponents.has(comp)) {
-        alerts.push({
-          id: uuid(),
-          severity: "medium",
-          source: "implementation",
-          description: `Task "${task.title}" references "${comp}" not in project brain`,
-          recommendation: "Review architecture alignment or update project brain",
-          detectedAt: new Date().toISOString(),
-        });
-      }
+  for (const branch of branches.filter((b) => b.status === "implementing")) {
+    const pending = proposals.filter(
+      (p) => p.targetBranchId === branch.id && ["under_review", "consensus_pending", "ready_for_manager"].includes(p.status)
+    );
+    if (pending.length > 0) {
+      alerts.push({
+        id: uuid(),
+        severity: "medium",
+        source: "implementation",
+        description: `${pending.length} pending suggestion(s) on implementing branch "${branch.name}"`,
+        recommendation: "Manager should review before implementation diverges",
+        detectedAt: new Date().toISOString(),
+      });
     }
   }
-
-  const openProposals = store.proposals.filter((p) => !["merged", "rejected", "archived"].includes(p.status));
-  if (openProposals.length > 3) {
-    alerts.push({
-      id: uuid(),
-      severity: "low",
-      source: "conversation",
-      description: `${openProposals.length} open proposals may indicate diverging team priorities`,
-      recommendation: "Schedule alignment session to resolve proposal backlog",
-      detectedAt: new Date().toISOString(),
-    });
-  }
-
-  store.driftAlerts.push(...alerts);
-  if (alerts.length) log("drift_detection", "scan", "full_scan", `Detected ${alerts.length} drift signals`);
+  if (alerts.length) await dbSaveDriftAlerts(alerts);
   return alerts;
 }
 
-// ─── Pipeline Orchestrator ──────────────────────────────────────────────────
+// ─── Pipelines ───────────────────────────────────────────────────────────────
 
-export function runProposalPipeline(
+export async function runProposalPipeline(
   title: string,
   description: string,
   authorId: string,
-  authorName: string
-): PipelineResult {
-  const proposal = createProposal(title, description, authorId, authorName);
-  gatherContext(proposal);
-  analyzeImpact(proposal);
-  generateReview(proposal);
-  sendNotification("slack", `New proposal ready for review: ${title}`, proposal.id);
-
-  return { proposal, logs: store.logs.filter((l) => l.proposalId === proposal.id) };
+  authorName: string,
+  targetType: ProposalTarget,
+  targetProjectId?: string,
+  targetBranchId?: string
+): Promise<PipelineResult> {
+  const proposal = await createProposal(title, description, authorId, authorName, targetType, targetProjectId, targetBranchId);
+  await gatherContext(proposal);
+  await analyzeImpact(proposal);
+  await generateReview(proposal);
+  const label = await getTargetLabel(proposal);
+  await log("communication", "notify_slack", `New suggestion for ${label}: ${title}`, "Queued", proposal.id);
+  const logs = (await dbGetAgentLogs()).filter((l) => l.proposalId === proposal.id);
+  try {
+    const { syncGovernedMemoryRegistry } = await import("@/lib/governance/memory-retrieval");
+    await syncGovernedMemoryRegistry();
+  } catch {
+    /* registry sync is best-effort */
+  }
+  return { proposal, logs };
 }
 
-export function runApprovalPipeline(proposalId: string): PipelineResult {
-  const proposal = store.proposals.find((p) => p.id === proposalId);
-  if (!proposal) throw new Error("Proposal not found");
-  if (proposal.status !== "approved") throw new Error("Proposal not approved");
+// ─── Queries ─────────────────────────────────────────────────────────────────
 
-  const branch = createDecisionBranch(proposal);
-  const tasks = generateImplementationTasks(proposal, branch);
-  mergeDecisionBranch(branch.id);
-  detectDrift();
-  sendNotification("slack", `Decision merged: ${proposal.title} → v${branch.version}`, proposal.id);
-
-  return { proposal, logs: store.logs.filter((l) => l.proposalId === proposalId), branch, tasks };
+export async function getProposals(projectId?: string, branchId?: string): Promise<Proposal[]> {
+  return dbGetProposals({ projectId, branchId });
 }
 
-export function getProposals(): Proposal[] {
-  return [...store.proposals].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+export async function getProposal(id: string): Promise<Proposal | undefined> {
+  return dbGetProposal(id);
 }
 
-export function getProposal(id: string): Proposal | undefined {
-  return store.proposals.find((p) => p.id === id);
+export async function getBranches(): Promise<DecisionBranch[]> {
+  return dbGetBranches();
 }
 
-export function getBranches(): DecisionBranch[] {
-  return [...store.branches];
+export async function getTasks(branchId?: string): Promise<ImplementationTask[]> {
+  return dbGetTasks(branchId);
 }
 
-export function getTasks(): ImplementationTask[] {
-  return [...store.tasks];
+export async function getAgentLogs(): Promise<AgentLog[]> {
+  return dbGetAgentLogs();
 }
 
-export function getAgentLogs(): AgentLog[] {
-  return [...store.logs].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+export async function getDriftAlerts(): Promise<DriftAlert[]> {
+  return dbGetDriftAlerts();
 }
 
-export function getDriftAlerts(): DriftAlert[] {
-  return [...store.driftAlerts];
+export async function getSuggestionTargets(): Promise<
+  { value: string; label: string; type: "project" | "branch"; projectId: string; branchId?: string }[]
+> {
+  const targets: { value: string; label: string; type: "project" | "branch"; projectId: string; branchId?: string }[] = [];
+  const projects = await getProjects();
+
+  for (const project of projects) {
+    targets.push({ value: `project:${project.id}`, label: project.name, type: "project", projectId: project.id });
+    for (const branch of await getOpenBranches(project.id)) {
+      targets.push({
+        value: `branch:${branch.id}`,
+        label: `${project.name} → ${branch.name}`,
+        type: "branch",
+        projectId: project.id,
+        branchId: branch.id,
+      });
+    }
+  }
+  return targets;
 }
 
-export function seedProject(): ProjectBrain {
-  const seed: ProjectBrain = {
-    id: "proj-andex-demo",
-    name: "E-Commerce Platform",
-    vision: "Build a scalable, maintainable e-commerce platform with clear architectural boundaries",
-    goals: [
-      "Reduce time-to-market for new features",
-      "Maintain shared team understanding of architecture",
-      "Enable safe, reversible engineering decisions",
-    ],
-    architecture: [
-      { id: "1", name: "API Gateway", type: "api", description: "Central API entry point", dependencies: ["Auth Service"] },
-      { id: "2", name: "Auth Service", type: "service", description: "Authentication and authorization", dependencies: ["User DB"] },
-      { id: "3", name: "Product Service", type: "service", description: "Product catalog management", dependencies: ["Product DB", "Search Service"] },
-      { id: "4", name: "Order Service", type: "service", description: "Order processing and fulfillment", dependencies: ["Payment Service", "Inventory Service"] },
-      { id: "5", name: "Payment Service", type: "integration", description: "Stripe payment integration", dependencies: [] },
-      { id: "6", name: "User DB", type: "database", description: "PostgreSQL user data store", dependencies: [] },
-      { id: "7", name: "Product DB", type: "database", description: "PostgreSQL product catalog", dependencies: [] },
-      { id: "8", name: "Search Service", type: "module", description: "Elasticsearch product search", dependencies: [] },
-    ],
-    institutionalMemory: [
-      {
-        id: "mem-1",
-        title: "Adopted microservices architecture",
-        content: "Team decided to split monolith into domain-bounded services for independent scaling.",
-        source: "decision",
-        createdAt: new Date(Date.now() - 30 * 86400000).toISOString(),
-      },
-      {
-        id: "mem-2",
-        title: "PostgreSQL as primary datastore",
-        content: "Chose PostgreSQL over MongoDB for ACID compliance in order processing.",
-        source: "decision",
-        createdAt: new Date(Date.now() - 20 * 86400000).toISOString(),
-      },
-    ],
-    currentVersion: "1.0.0",
-    updatedAt: new Date().toISOString(),
-  };
+// ─── Product Discovery ───────────────────────────────────────────────────────
 
-  store.reset(seed);
-  log("project_brain", "seed", "demo", "Demo project initialized");
-  return seed;
+export async function runProductDiscovery(
+  projectId: string,
+  feedbackInput?: FeedbackItem[]
+): Promise<DiscoveryResult> {
+  await getProjectById(projectId);
+
+  const feedback =
+    feedbackInput && feedbackInput.length > 0
+      ? feedbackInput.map((f) => ({ ...f, projectId }))
+      : getMockFeedback(projectId);
+
+  await dbClearDiscoveryForProject(projectId);
+  await dbSaveFeedbackItems(feedback);
+
+  const featurePacks = runProductDiscoveryAgent(projectId, feedback);
+  await dbSaveFeaturePacks(featurePacks);
+
+  await log(
+    "product_discovery",
+    "cluster_feedback",
+    `${feedback.length} feedback items`,
+    `Generated ${featurePacks.length} Feature Packs for project ${projectId}`
+  );
+
+  return { projectId, feedbackProcessed: feedback.length, featurePacks };
+}
+
+export async function getFeaturePacks(projectId?: string): Promise<FeaturePack[]> {
+  return dbGetFeaturePacks(projectId);
+}
+
+export async function getFeaturePack(id: string): Promise<FeaturePack | undefined> {
+  return dbGetFeaturePack(id);
+}
+
+export async function getProjectFeedback(projectId: string): Promise<FeedbackItem[]> {
+  const stored = await dbGetFeedbackItems(projectId);
+  return stored.length > 0 ? stored : getMockFeedback(projectId);
+}
+
+export async function promoteFeaturePackToProposal(
+  featurePackId: string,
+  authorId: string,
+  authorName: string,
+  target: string
+): Promise<PipelineResult & { featurePack: FeaturePack }> {
+  const pack = await dbGetFeaturePack(featurePackId);
+  if (!pack) throw new Error("Feature Pack not found");
+  if (pack.status === "promoted") throw new Error("Feature Pack already promoted to a proposal");
+
+  const [targetType, targetId] = target.split(":") as ["project" | "branch", string];
+  if (!targetId) throw new Error("Invalid target");
+
+  const { title, description } = featurePackToProposalText(pack);
+  const result = await runProposalPipeline(
+    title,
+    description,
+    authorId,
+    authorName,
+    targetType === "project" ? "main" : "branch",
+    targetType === "project" ? targetId : undefined,
+    targetType === "branch" ? targetId : undefined
+  );
+
+  pack.status = "promoted";
+  pack.promotedProposalId = result.proposal.id;
+  pack.updatedAt = new Date().toISOString();
+  await dbSaveFeaturePack(pack);
+
+  await log(
+    "product_discovery",
+    "promote_to_proposal",
+    pack.title,
+    `Promoted Feature Pack → proposal ${result.proposal.id}`,
+    result.proposal.id
+  );
+
+  return { ...result, featurePack: pack };
 }

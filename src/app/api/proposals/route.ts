@@ -1,62 +1,78 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
   getProposals,
-  getProposal,
   runProposalPipeline,
-  runApprovalPipeline,
   castVote,
-  checkConsensus,
-  updateAffectedTasks,
+  tallyVotes,
+  managerAcceptProposal,
+  managerDeclineProposal,
+  getSuggestionTargets,
 } from "@/lib/agents/orchestrator";
 
 export async function GET() {
-  return NextResponse.json({ proposals: getProposals() });
+  return NextResponse.json({
+    proposals: await getProposals(),
+    targets: await getSuggestionTargets(),
+  });
 }
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const { title, description, authorId = "user-1", authorName = "Demo User" } = body;
+  const { title, description, authorId = "wkr-1", authorName = "Alex", target } = body;
 
-  if (!title || !description) {
-    return NextResponse.json({ error: "title and description required" }, { status: 400 });
+  if (!title || !description || !target) {
+    return NextResponse.json({ error: "title, description, and target required" }, { status: 400 });
   }
 
-  const result = runProposalPipeline(title, description, authorId, authorName);
-  return NextResponse.json(result, { status: 201 });
+  const [targetType, targetId] = target.split(":") as ["project" | "branch", string];
+  if (!targetId) return NextResponse.json({ error: "Invalid target" }, { status: 400 });
+
+  try {
+    const result = await runProposalPipeline(
+      title,
+      description,
+      authorId,
+      authorName,
+      targetType === "project" ? "main" : "branch",
+      targetType === "project" ? targetId : undefined,
+      targetType === "branch" ? targetId : undefined
+    );
+    return NextResponse.json(result, { status: 201 });
+  } catch (e) {
+    return NextResponse.json({ error: e instanceof Error ? e.message : "Failed" }, { status: 400 });
+  }
 }
 
 export async function PATCH(req: NextRequest) {
   const body = await req.json();
-  const { proposalId, action, userId, userName, vote, comment } = body;
+  const { proposalId, action, userId, userName, vote, comment, note } = body;
 
   if (!proposalId || !action) {
     return NextResponse.json({ error: "proposalId and action required" }, { status: 400 });
   }
 
-  switch (action) {
-    case "vote": {
-      const proposal = castVote(proposalId, userId ?? "user-1", userName ?? "Demo User", vote, comment);
-      return NextResponse.json({ proposal });
+  try {
+    switch (action) {
+      case "vote": {
+        const proposal = await castVote(proposalId, userId, userName, vote, comment);
+        return NextResponse.json({ proposal });
+      }
+      case "tally": {
+        const proposal = await tallyVotes(proposalId);
+        return NextResponse.json({ proposal });
+      }
+      case "accept": {
+        const result = await managerAcceptProposal(proposalId, userId, note);
+        return NextResponse.json(result);
+      }
+      case "decline": {
+        const proposal = await managerDeclineProposal(proposalId, userId, note);
+        return NextResponse.json({ proposal });
+      }
+      default:
+        return NextResponse.json({ error: "Unknown action" }, { status: 400 });
     }
-    case "check_consensus": {
-      const proposal = checkConsensus(proposalId);
-      return NextResponse.json({ proposal });
-    }
-    case "approve": {
-      const proposal = getProposal(proposalId);
-      if (!proposal) return NextResponse.json({ error: "Not found" }, { status: 404 });
-      proposal.status = "approved";
-      proposal.managerApproved = true;
-      const result = runApprovalPipeline(proposalId);
-      return NextResponse.json(result);
-    }
-    case "update_tasks": {
-      const proposal = getProposal(proposalId);
-      if (!proposal) return NextResponse.json({ error: "Not found" }, { status: 404 });
-      const tasks = updateAffectedTasks(proposal);
-      return NextResponse.json({ tasks });
-    }
-    default:
-      return NextResponse.json({ error: "Unknown action" }, { status: 400 });
+  } catch (e) {
+    return NextResponse.json({ error: e instanceof Error ? e.message : "Action failed" }, { status: 400 });
   }
 }

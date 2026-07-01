@@ -4,6 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
+import { useUser } from "@/lib/context/user-context";
+import { TEAM_MEMBERS } from "@/lib/auth/team";
 import {
   Brain,
   GitBranch,
@@ -13,7 +15,12 @@ import {
   Activity,
   AlertTriangle,
   Sparkles,
+  User,
+  ClipboardList,
+  Lightbulb,
+  Shield,
 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 
 const nav = [
   {
@@ -21,17 +28,26 @@ const nav = [
     items: [{ href: "/", label: "Dashboard", icon: LayoutDashboard }],
   },
   {
+    section: "Governance",
+    items: [{ href: "/memory-governance", label: "Memory Governance", icon: Shield }],
+  },
+  {
+    section: "Discovery",
+    items: [{ href: "/feature-packs", label: "Feature Packs", icon: Lightbulb }],
+  },
+  {
     section: "Decisions",
     items: [
-      { href: "/proposals", label: "Proposals", icon: FileText },
-      { href: "/branches", label: "Decision Branches", icon: GitBranch },
+      { href: "/proposals", label: "Suggestions", icon: FileText },
+      { href: "/branches", label: "Branches", icon: GitBranch },
       { href: "/tasks", label: "Implementation", icon: ListTodo },
     ],
   },
   {
     section: "Knowledge",
     items: [
-      { href: "/brain", label: "Project Brain", icon: Brain },
+      { href: "/brain", label: "Main Ideas", icon: Brain },
+      { href: "/requirements", label: "Requirements", icon: ClipboardList },
       { href: "/agents", label: "Agent Activity", icon: Activity },
       { href: "/drift", label: "Drift Detection", icon: AlertTriangle },
     ],
@@ -40,6 +56,10 @@ const nav = [
 
 export function Sidebar() {
   const pathname = usePathname();
+  const { currentUser, setCurrentUser, isManager } = useUser();
+
+  const managers = TEAM_MEMBERS.filter((m) => m.role === "manager");
+  const workers = TEAM_MEMBERS.filter((m) => m.role === "worker");
 
   return (
     <aside className="flex h-screen w-64 shrink-0 flex-col border-r border-border/70 glass">
@@ -52,11 +72,40 @@ export function Sidebar() {
             <h1 className="text-lg font-bold leading-none tracking-tight">
               <span className="text-gradient">Andex</span> AI
             </h1>
-            <p className="mt-1 text-[11px] text-muted-foreground">
-              Decisions, version-controlled
-            </p>
+            <p className="mt-1 text-[11px] text-muted-foreground">Decisions, version-controlled</p>
           </div>
         </Link>
+      </div>
+
+      <div className="border-b border-border/70 p-4 space-y-2">
+        <p className="text-[10px] uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+          <User className="h-3 w-3" /> Team member
+        </p>
+        <select
+          className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-xs"
+          value={currentUser.id}
+          onChange={(e) => {
+            const m = TEAM_MEMBERS.find((x) => x.id === e.target.value);
+            if (m) setCurrentUser(m);
+          }}
+        >
+          <optgroup label="Manager">
+            {managers.map((m) => (
+              <option key={m.id} value={m.id}>{m.name}</option>
+            ))}
+          </optgroup>
+          <optgroup label="Workers">
+            {workers.map((m) => (
+              <option key={m.id} value={m.id}>{m.name}</option>
+            ))}
+          </optgroup>
+        </select>
+        <Badge variant={isManager ? "success" : "secondary"} className="text-[10px]">
+          {isManager ? "Manager" : "Worker"}
+        </Badge>
+        <Badge variant="secondary" className="text-[10px] capitalize">
+          Memory: {currentUser.memoryRole}
+        </Badge>
       </div>
 
       <nav className="flex-1 space-y-6 overflow-y-auto p-4">
@@ -67,7 +116,7 @@ export function Sidebar() {
             </p>
             <div className="space-y-1">
               {group.items.map((item) => {
-                const active = pathname === item.href;
+                const active = pathname === item.href || pathname.startsWith(item.href + "/");
                 return (
                   <Link
                     key={item.href}
