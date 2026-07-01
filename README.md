@@ -74,6 +74,86 @@ npm run test:llm
 
 Full usage guide (client API, HTTP routes, adding providers): **[docs/LLM.md](docs/LLM.md)**.
 
+## API Reference
+
+All endpoints live under `/api` (Next.js route handlers). State is held in an
+in-memory store that **auto-seeds a demo project** on first read, so every
+endpoint works with zero setup.
+
+| Endpoint | Method | What it does |
+| --- | --- | --- |
+| `/api/project` | `GET` | Full dashboard snapshot: project brain, proposals, branches, tasks, agent logs, drift alerts, and stats. Seeds the demo on first call. |
+| `/api/project` | `POST` | Re-seed the demo project and run a drift scan. |
+| `/api/proposals` | `GET` | List all proposals (newest first). |
+| `/api/proposals` | `POST` | Create a proposal and run the pipeline: **context → impact → review**. Body: `{ title, description }`. |
+| `/api/proposals` | `PATCH` | Act on a proposal. Body: `{ proposalId, action, ... }` where `action` is `vote` \| `check_consensus` \| `approve` \| `update_tasks`. `approve` runs the approval pipeline (branch + tasks + merge). |
+| `/api/proposals/[id]` | `GET` | Fetch a single proposal by id. |
+| `/api/branches` | `GET` | List decision branches (version history). |
+| `/api/branches` | `POST` | Roll the project brain back to a branch snapshot. Body: `{ branchId }`. |
+| `/api/tasks` | `GET` | List implementation tasks. |
+| `/api/agents` | `GET` | Full agent activity log (auditable trail of every agent action). |
+| `/api/drift` | `GET` | Current mental-model drift alerts. |
+| `/api/drift` | `POST` | Run a drift scan and return new alerts. |
+| `/api/llm` | `GET` | LLM provider status (which keys are configured — never returns keys). |
+| `/api/llm` | `POST` | Run an LLM completion. Body: `{ prompt }` or `{ messages }` + options. See [docs/LLM.md](docs/LLM.md). |
+
+## Testing the APIs
+
+### From the frontend (UI)
+
+Run `npm run dev`, open <http://localhost:3000>, and each page exercises the
+matching endpoint:
+
+| Page | Calls |
+| --- | --- |
+| **Dashboard** (`/`) | `GET /api/project`, `GET /api/llm`, `POST /api/llm` (Ask the Project Brain) |
+| **Proposals** (`/proposals`) | `GET`/`POST`/`PATCH /api/proposals` — submit one to watch the agent pipeline run |
+| **Decision Branches** (`/branches`) | `GET /api/branches`, `POST` to roll back |
+| **Implementation** (`/tasks`) | `GET /api/tasks` |
+| **Agent Activity** (`/agents`) | `GET /api/agents` |
+| **Drift Detection** (`/drift`) | `GET`/`POST /api/drift` |
+
+### From the terminal (curl)
+
+With the dev server running:
+
+```bash
+# Dashboard snapshot (auto-seeds the demo)
+curl http://localhost:3000/api/project
+
+# Submit a proposal — runs context → impact → review
+curl -X POST http://localhost:3000/api/proposals \
+  -H "Content-Type: application/json" \
+  -d '{"title":"Migrate Auth to OAuth 2.0","description":"Replace session auth with OAuth 2.0 across services"}'
+
+# Vote on it (use an id from the response above)
+curl -X PATCH http://localhost:3000/api/proposals \
+  -H "Content-Type: application/json" \
+  -d '{"proposalId":"<ID>","action":"vote","vote":"approve"}'
+
+# Approve — creates a decision branch, generates tasks, merges
+curl -X PATCH http://localhost:3000/api/proposals \
+  -H "Content-Type: application/json" \
+  -d '{"proposalId":"<ID>","action":"approve"}'
+
+# Run a drift scan
+curl -X POST http://localhost:3000/api/drift
+
+# LLM: provider status, then a completion
+curl http://localhost:3000/api/llm
+curl -X POST http://localhost:3000/api/llm \
+  -H "Content-Type: application/json" \
+  -d '{"prompt":"What is mental model drift?","maxTokens":120}'
+```
+
+### LLM keys
+
+Verify your provider keys independently of the app:
+
+```bash
+npm run test:llm
+```
+
 ## Deploy to Vercel
 
 1. Push to GitHub
