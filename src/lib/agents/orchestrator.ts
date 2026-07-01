@@ -13,6 +13,7 @@ import type {
   ReviewAnalysis,
   Vote,
 } from "@/lib/types";
+import { universityBrain, UNIVERSITY_PROPOSALS, DIVERGENT_TASK } from "@/lib/fixtures/university";
 
 // In-memory store for demo / when DATABASE_URL is unavailable on Vercel preview
 class InMemoryStore {
@@ -527,4 +528,42 @@ export function seedProject(): ProjectBrain {
   store.reset(seed);
   log("project_brain", "seed", "demo", "Demo project initialized");
   return seed;
+}
+
+// ─── Test organisation seed: Metropolitan University ────────────────────────
+// Drives the real pipeline with a fixture that covers edge cases (rejected,
+// needs-discussion, tied votes, duplicates, drift). See src/lib/fixtures.
+
+export function seedUniversity(): ProjectBrain {
+  store.reset(universityBrain());
+  log("project_brain", "seed", "university", "Metropolitan University demo initialized");
+
+  for (const spec of UNIVERSITY_PROPOSALS) {
+    const { proposal } = runProposalPipeline(spec.title, spec.description, spec.author.id, spec.author.name);
+    for (const v of spec.votes) {
+      castVote(proposal.id, v.user.id, v.user.name, v.vote, v.comment);
+    }
+    if (spec.votes.length) checkConsensus(proposal.id);
+    if (spec.finalize === "approve" && proposal.status === "approved") {
+      proposal.managerApproved = true;
+      runApprovalPipeline(proposal.id);
+    }
+  }
+
+  // Simulate implementation drift: a pending task that references a component
+  // which was removed from the brain (the retired "Legacy Student Portal").
+  const branchId = store.branches.find((b) => b.merged)?.id ?? "orphan-branch";
+  store.tasks.push({
+    id: uuid(),
+    title: DIVERGENT_TASK.title,
+    description: DIVERGENT_TASK.description,
+    status: "pending",
+    branchId,
+    affectedComponents: DIVERGENT_TASK.affectedComponents,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  });
+
+  detectDrift();
+  return store.project!;
 }

@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import {
   getProjectBrain,
   getProposals,
@@ -7,6 +7,7 @@ import {
   getAgentLogs,
   getDriftAlerts,
   seedProject,
+  seedUniversity,
   detectDrift,
 } from "@/lib/agents/orchestrator";
 
@@ -30,8 +31,22 @@ export async function GET() {
   });
 }
 
-export async function POST() {
+export async function POST(req: NextRequest) {
+  // Body: { scenario?: "ecommerce" | "university" }. Defaults to ecommerce.
+  let scenario = "ecommerce";
+  try {
+    const body = await req.json();
+    if (body?.scenario) scenario = String(body.scenario);
+  } catch {
+    /* no body — use default */
+  }
+
+  if (scenario === "university") {
+    seedUniversity();
+    return NextResponse.json({ success: true, scenario, message: "Metropolitan University test data seeded" });
+  }
+
   seedProject();
   detectDrift();
-  return NextResponse.json({ success: true, message: "Demo project seeded" });
+  return NextResponse.json({ success: true, scenario: "ecommerce", message: "E-Commerce demo seeded" });
 }
