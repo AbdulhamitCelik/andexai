@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { ProjectBrain, Proposal, AgentLog, DriftAlert } from "@/lib/types";
 import { GitBranch, Brain, FileText, AlertTriangle, ArrowRight } from "lucide-react";
+import { AskBrain } from "@/components/ask-brain";
 import Link from "next/link";
 
 interface DashboardData {
@@ -49,10 +50,15 @@ export default function DashboardPage() {
 
   return (
     <AppShell>
-      <div className="p-8 space-y-8">
+      <div className="animate-in space-y-8 p-8">
         <div className="flex items-start justify-between">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">{project.name}</h1>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-primary/80">
+              Project Brain
+            </p>
+            <h1 className="text-4xl font-bold tracking-tight">
+              <span className="text-gradient">{project.name}</span>
+            </h1>
             <p className="mt-2 max-w-2xl text-muted-foreground">{project.vision}</p>
             <div className="mt-3 flex items-center gap-2">
               <Badge>v{project.currentVersion}</Badge>
@@ -65,6 +71,8 @@ export default function DashboardPage() {
             </Button>
           </Link>
         </div>
+
+        <AskBrain projectName={project.name} vision={project.vision} />
 
         <div className="grid gap-4 md:grid-cols-4">
           <StatCard icon={FileText} label="Open Proposals" value={stats.openProposals} />
@@ -100,7 +108,7 @@ export default function DashboardPage() {
               <CardTitle>Agent Activity</CardTitle>
               <CardDescription>Transparent, auditable AI agent actions</CardDescription>
             </CardHeader>
-            <CardContent className="space-y--2">
+            <CardContent className="space-y-2">
               {agentLogs.slice(0, 6).map((log) => (
                 <div key={log.id} className="flex items-start gap-3 text-sm border-b border-border/50 pb-2 last:border-0">
                   <Badge variant="secondary" className="shrink-0 text-[10px]">{log.agent.replace("_", " ")}</Badge>
@@ -157,7 +165,7 @@ export default function DashboardPage() {
 
 function StatCard({ icon: Icon, label, value, variant = "default" }: { icon: React.ElementType; label: string; value: number; variant?: "default" | "warning" }) {
   return (
-    <Card>
+    <Card className="hover:glow-primary">
       <CardContent className="flex items-center gap-4 p-6">
         <div className={`rounded-lg p-3 ${variant === "warning" ? "bg-amber-500/10" : "bg-primary/10"}`}>
           <Icon className={`h-5 w-5 ${variant === "warning" ? "text-amber-400" : "text-primary"}`} />
