@@ -418,6 +418,7 @@ export async function managerAcceptProposal(proposalId: string, managerId: strin
   proposal.status = "accepted";
   proposal.updatedAt = new Date().toISOString();
   await dbSaveProposal(proposal);
+  await log("consensus", "accept", proposal.title, note ?? "Accepted by manager", proposalId);
 
   if (proposal.targetType === "main") {
     const branch = await createDecisionBranch(proposal);
@@ -724,6 +725,12 @@ export async function detectDrift(): Promise<DriftAlert[]> {
   }
 
   if (alerts.length) await dbSaveDriftAlerts(alerts);
+  await log(
+    "drift_detection",
+    "scan",
+    `${projects.length} project(s), ${activeTasks.length} active task(s), ${proposals.length} suggestion(s)`,
+    alerts.length ? `${alerts.length} drift alert(s) raised` : "No drift detected — team alignment looks healthy"
+  );
   return alerts;
 }
 
