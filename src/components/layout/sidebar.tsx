@@ -82,12 +82,16 @@ export function Sidebar({ collapsed = false }: { collapsed?: boolean }) {
         collapsed ? "w-[4.5rem]" : "w-64"
       )}
     >
-      <div className={cn("border-b border-border/70", collapsed ? "p-3" : "p-6")}>
-        <div className={collapsed ? "flex justify-center" : "space-y-3"}>
-          <AndexLogo href="/" iconOnly={collapsed} size={collapsed ? "sm" : "md"} priority />
-          {!collapsed && (
-            <p className="text-[11px] text-muted-foreground tracking-wide">AI councils for product development</p>
-          )}
+      <div className={cn("border-b border-border/70", collapsed ? "p-3" : "p-5")}>
+        <div className={collapsed ? "flex justify-center" : undefined}>
+          <AndexLogo
+            href="/"
+            iconOnly={collapsed}
+            size={collapsed ? "sm" : "md"}
+            showAi
+            tagline={collapsed ? undefined : "AI councils for product development"}
+            priority
+          />
         </div>
         {!collapsed && (
           <div className="mt-3 flex gap-1">

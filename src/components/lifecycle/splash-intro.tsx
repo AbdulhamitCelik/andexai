@@ -61,8 +61,8 @@ export function SplashIntro() {
         <p className="font-display text-sm font-light tracking-[0.35em] uppercase text-rose-200/80 mb-6 animate-splash-rise">
           The product journey
         </p>
-        <div className="animate-splash-rise splash-delay-1 mb-4 rounded-xl bg-white p-4 shadow-2xl shadow-black/20">
-          <AndexLogo size="lg" priority />
+        <div className="animate-splash-rise splash-delay-1 mb-6 rounded-2xl border border-white/25 bg-white/95 px-10 py-8 shadow-2xl shadow-black/30 backdrop-blur-sm">
+          <AndexLogo layout="stacked" size="lg" showAi priority />
         </div>
         <p className="font-display text-xl md:text-2xl font-light text-white/60 tracking-wide animate-splash-rise splash-delay-2">
           Councils guide the path of product
