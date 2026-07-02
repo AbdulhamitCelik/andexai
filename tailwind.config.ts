@@ -46,6 +46,30 @@ const config: Config = {
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
       },
+      fontFamily: {
+        sans: ["var(--font-inter)", "system-ui", "sans-serif"],
+        display: ["Georgia", "Times New Roman", "var(--font-inter)", "serif"],
+      },
+      keyframes: {
+        "splash-rise": {
+          from: { opacity: "0", transform: "translateY(24px)" },
+          to: { opacity: "1", transform: "translateY(0)" },
+        },
+        "sakura-fall": {
+          "0%": { transform: "translateY(-10vh) rotate(0deg)", opacity: "0" },
+          "10%": { opacity: "0.85" },
+          "100%": { transform: "translateY(110vh) rotate(720deg)", opacity: "0" },
+        },
+        "ink-breathe": {
+          "0%, 100%": { opacity: "0.92" },
+          "50%": { opacity: "1" },
+        },
+      },
+      animation: {
+        "splash-rise": "splash-rise 1.2s ease both",
+        "sakura-fall": "sakura-fall linear infinite",
+        "ink-breathe": "ink-breathe 6s ease-in-out infinite",
+      },
     },
   },
   plugins: [],

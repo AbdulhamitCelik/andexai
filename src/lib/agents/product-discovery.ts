@@ -1,5 +1,6 @@
 import { v4 as uuid } from "uuid";
 import type { EstimatedImpact, FeaturePack, FeedbackItem } from "@/lib/types";
+import { priorityFromFeaturePack } from "@/lib/engines/priority-engine";
 
 interface ThemeTemplate {
   id: string;
@@ -149,13 +150,6 @@ function topSegments(items: FeedbackItem[]): string[] {
     .map(([seg]) => seg.replace(/_/g, " "));
 }
 
-function priorityScore(count: number, impact: EstimatedImpact, negativeRatio: number): number {
-  const impactWeight = impact === "high" ? 40 : impact === "medium" ? 25 : 10;
-  const volumeWeight = Math.min(count * 3, 35);
-  const sentimentWeight = Math.round(negativeRatio * 25);
-  return Math.min(100, impactWeight + volumeWeight + sentimentWeight);
-}
-
 function confidenceScore(count: number, avgMatch: number): number {
   const volume = Math.min(count / 10, 1) * 50;
   const match = Math.min(avgMatch / 5, 1) * 50;
@@ -202,18 +196,32 @@ export function runProductDiscoveryAgent(
   return ranked.map(([themeId, { items, scores }]) => {
     const theme = THEMES.find((t) => t.id === themeId)!;
     const negativeCount = items.filter((i) => i.sentiment === "negative").length;
+    const negativeRatio = negativeCount / items.length;
     const geoInsights = topGeo(items);
     const segments = topSegments(items);
     const quotes = items.slice(0, 4).map((i) => i.text);
     const avgMatch = scores.reduce((a, b) => a + b, 0) / scores.length;
+    const conf = confidenceScore(items.length, avgMatch);
+    const packId = uuid();
 
     const summary =
       theme.id === "uk-checkout"
         ? `Users in the UK repeatedly complain about slow checkout and missing local payment options. ${items.length} signals clustered.`
         : `${items.length} feedback signals point to: ${theme.userProblem.slice(0, 80)}…`;
 
+    const priorityRecord = priorityFromFeaturePack({
+      id: packId,
+      projectId,
+      title: theme.title,
+      evidenceCount: items.length,
+      estimatedImpact: theme.estimatedImpact,
+      confidenceScore: conf,
+      negativeRatio,
+      topEvidenceQuotes: quotes,
+    });
+
     return {
-      id: uuid(),
+      id: packId,
       projectId,
       title: theme.title,
       summary,
@@ -226,8 +234,8 @@ export function runProductDiscoveryAgent(
       pros: theme.pros,
       cons: theme.cons,
       risks: theme.risks,
-      priorityScore: priorityScore(items.length, theme.estimatedImpact, negativeCount / items.length),
-      confidenceScore: confidenceScore(items.length, avgMatch),
+      priorityScore: priorityRecord.overallScore,
+      confidenceScore: priorityRecord.confidenceScore,
       estimatedImpact: theme.estimatedImpact,
       status: "discovered" as const,
       feedbackIds: items.map((i) => i.id),

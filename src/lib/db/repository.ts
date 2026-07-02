@@ -10,9 +10,12 @@ import {
   FeaturePackModel,
   GovernedMemoryModel,
   PermissionAuditLogModel,
+  CouncilRunModel,
+  PriorityScoreModel,
 } from "./models";
 import type {
   AgentLog,
+  CouncilRun,
   DecisionBranch,
   DriftAlert,
   FeaturePack,
@@ -20,6 +23,7 @@ import type {
   GovernedMemoryRecord,
   ImplementationTask,
   PermissionAuditLog,
+  PriorityScoreRecord,
   ProjectBrain,
   Proposal,
 } from "@/lib/types";
@@ -152,6 +156,8 @@ export async function dbInitCollections(): Promise<{ collections: string[]; mess
     FeaturePackModel.createIndexes(),
     GovernedMemoryModel.createIndexes(),
     PermissionAuditLogModel.createIndexes(),
+    CouncilRunModel.createIndexes(),
+    PriorityScoreModel.createIndexes(),
   ]);
   return {
     collections: [
@@ -165,6 +171,8 @@ export async function dbInitCollections(): Promise<{ collections: string[]; mess
       "feature_packs",
       "governed_memories",
       "permission_audit_logs",
+      "council_runs",
+      "priority_scores",
     ],
     message: "MongoDB collections and indexes ready",
   };
@@ -250,4 +258,43 @@ export async function dbGetPermissionAuditLogs(filter?: {
   if (filter?.projectId) q.projectId = filter.projectId;
   const limit = filter?.limit ?? 100;
   return (await PermissionAuditLogModel.find(q).sort({ timestamp: -1 }).limit(limit).lean()) as PermissionAuditLog[];
+}
+
+// ─── Council Runs ────────────────────────────────────────────────────────────
+
+export async function dbGetCouncilRuns(projectId?: string): Promise<CouncilRun[]> {
+  await ensureDb();
+  const q = projectId ? { projectId } : {};
+  return (await CouncilRunModel.find(q).sort({ createdAt: -1 }).lean()) as CouncilRun[];
+}
+
+export async function dbGetCouncilRun(id: string): Promise<CouncilRun | undefined> {
+  await ensureDb();
+  return lean(await CouncilRunModel.findOne({ id }).lean());
+}
+
+export async function dbSaveCouncilRun(run: CouncilRun): Promise<CouncilRun> {
+  await ensureDb();
+  await CouncilRunModel.findOneAndUpdate({ id: run.id }, run, { upsert: true, new: true });
+  return run;
+}
+
+// ─── Priority Scores ─────────────────────────────────────────────────────────
+
+export async function dbGetPriorityScores(projectId?: string): Promise<PriorityScoreRecord[]> {
+  await ensureDb();
+  const q = projectId ? { projectId } : {};
+  return (await PriorityScoreModel.find(q).sort({ overallScore: -1 }).lean()) as PriorityScoreRecord[];
+}
+
+export async function dbSavePriorityScores(scores: PriorityScoreRecord[]): Promise<void> {
+  await ensureDb();
+  await Promise.all(
+    scores.map((s) => PriorityScoreModel.findOneAndUpdate({ id: s.id }, s, { upsert: true }))
+  );
+}
+
+export async function dbGetPriorityScore(entityId: string): Promise<PriorityScoreRecord | undefined> {
+  await ensureDb();
+  return lean(await PriorityScoreModel.findOne({ entityId }).lean());
 }

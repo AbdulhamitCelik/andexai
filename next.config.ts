@@ -3,11 +3,8 @@ import path from "path";
 
 const nextConfig: NextConfig = {
   outputFileTracingRoot: path.join(__dirname),
-  // Keep the dev-mode indicator out of the bottom-left corner, where it would
-  // otherwise cover the sidebar's "providers online" status.
-  devIndicators: {
-    position: "bottom-right",
-  },
+  // Hide the Next.js dev-mode "N" indicator (errors still show in console/overlay).
+  devIndicators: false,
   experimental: {
     serverActions: {
       bodySizeLimit: "2mb",

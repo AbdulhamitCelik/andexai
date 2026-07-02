@@ -46,6 +46,30 @@ export const PROVIDERS: LlmProvider[] = [
     defaultModel: "gpt-oss-120b",
   },
   {
+    id: "mistral",
+    name: "Mistral AI",
+    envKey: "MISTRAL_API_KEY",
+    baseUrlEnv: "MISTRAL_BASE_URL",
+    baseUrl: "https://api.mistral.ai/v1",
+    defaultModel: "mistral-small-latest",
+  },
+  {
+    id: "sambanova",
+    name: "SambaNova",
+    envKey: "SAMBANOVA_API_KEY",
+    baseUrlEnv: "SAMBANOVA_BASE_URL",
+    baseUrl: "https://api.sambanova.ai/v1",
+    defaultModel: "Meta-Llama-3.1-8B-Instruct",
+  },
+  {
+    id: "cohere",
+    name: "Cohere",
+    envKey: "COHERE_API_KEY",
+    baseUrlEnv: "COHERE_BASE_URL",
+    baseUrl: "https://api.cohere.ai/compatibility/v1",
+    defaultModel: "command-r7b-12-2024",
+  },
+  {
     id: "openrouter",
     name: "OpenRouter",
     envKey: "OPENROUTER_API_KEY",
@@ -60,30 +84,6 @@ export const PROVIDERS: LlmProvider[] = [
     baseUrlEnv: "NVIDIA_BASE_URL",
     baseUrl: "https://integrate.api.nvidia.com/v1",
     defaultModel: "meta/llama-3.1-8b-instruct",
-  },
-  {
-    id: "mistral",
-    name: "Mistral AI",
-    envKey: "MISTRAL_API_KEY",
-    baseUrlEnv: "MISTRAL_BASE_URL",
-    baseUrl: "https://api.mistral.ai/v1",
-    defaultModel: "mistral-small-latest",
-  },
-  {
-    id: "sambanova",
-    name: "SambaNova Cloud",
-    envKey: "SAMBANOVA_API_KEY",
-    baseUrlEnv: "SAMBANOVA_BASE_URL",
-    baseUrl: "https://api.sambanova.ai/v1",
-    defaultModel: "Meta-Llama-3.3-70B-Instruct",
-  },
-  {
-    id: "cohere",
-    name: "Cohere",
-    envKey: "COHERE_API_KEY",
-    baseUrlEnv: "COHERE_BASE_URL",
-    baseUrl: "https://api.cohere.ai/compatibility/v1",
-    defaultModel: "command-r-08-2024",
   },
 ];
 
@@ -153,12 +153,20 @@ async function callProvider(
   if (!key) throw new Error("no API key configured");
 
   const model = opts.model ?? p.defaultModel;
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${key}`,
+    "Content-Type": "application/json",
+  };
+  if (p.id === "openrouter") {
+    const siteUrl = process.env.OPENROUTER_SITE_URL?.trim();
+    const siteName = process.env.OPENROUTER_SITE_NAME?.trim();
+    if (siteUrl) headers["HTTP-Referer"] = siteUrl;
+    if (siteName) headers["X-Title"] = siteName;
+  }
+
   const res = await fetch(`${baseUrlFor(p)}/chat/completions`, {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${key}`,
-      "Content-Type": "application/json",
-    },
+    headers,
     body: JSON.stringify({
       model,
       messages,

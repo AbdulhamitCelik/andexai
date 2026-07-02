@@ -1,14 +1,16 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import { UserProvider } from "@/lib/context/user-context";
+import { ThemeProvider } from "@/lib/context/theme-context";
+import { SplashIntro } from "@/components/lifecycle/splash-intro";
 import "./globals.css";
 
-const inter = Inter({ subsets: ["latin"] });
+const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
 export const metadata: Metadata = {
-  title: "Andex AI — GitHub for Engineering Decisions",
+  title: "Andex AI — Product Operating System",
   description:
-    "Version control engineering decisions, maintain institutional knowledge, and keep engineering teams aligned as projects evolve.",
+    "AI Councils coordinate the full product lifecycle. Humans approve every important decision.",
 };
 
 export default function RootLayout({
@@ -17,9 +19,21 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark">
-      <body className={inter.className}>
-        <UserProvider>{children}</UserProvider>
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var t=localStorage.getItem("andex-theme");document.documentElement.classList.add(t==="light"?"light":"dark")}catch(e){document.documentElement.classList.add("dark")}})();`,
+          }}
+        />
+      </head>
+      <body className={`${inter.variable} font-sans`}>
+        <ThemeProvider>
+          <UserProvider>
+            <SplashIntro />
+            {children}
+          </UserProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

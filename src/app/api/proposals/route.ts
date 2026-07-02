@@ -8,12 +8,35 @@ import {
   managerDeclineProposal,
   getSuggestionTargets,
 } from "@/lib/agents/orchestrator";
+import { isDbConfigured } from "@/lib/db/mongodb";
 
 export async function GET() {
-  return NextResponse.json({
-    proposals: await getProposals(),
-    targets: await getSuggestionTargets(),
-  });
+  if (!isDbConfigured()) {
+    return NextResponse.json(
+      {
+        error: "MONGODB_URI is not configured. Add it to .env.local and run POST /api/db/init",
+        proposals: [],
+        targets: [],
+      },
+      { status: 503 }
+    );
+  }
+
+  try {
+    return NextResponse.json({
+      proposals: await getProposals(),
+      targets: await getSuggestionTargets(),
+    });
+  } catch (e) {
+    return NextResponse.json(
+      {
+        error: e instanceof Error ? e.message : "Database error",
+        proposals: [],
+        targets: [],
+      },
+      { status: 503 }
+    );
+  }
 }
 
 export async function POST(req: NextRequest) {

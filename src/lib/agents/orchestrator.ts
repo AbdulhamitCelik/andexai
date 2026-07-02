@@ -26,6 +26,10 @@ import {
   dbClearDiscoveryForProject,
 } from "@/lib/db/repository";
 import { runProductDiscoveryAgent, featurePackToProposalText } from "@/lib/agents/product-discovery";
+import { analyzeAndStoreImpact } from "@/lib/agents/impact-agent";
+import { runPlanningCouncil } from "@/lib/councils/planning-council";
+import { buildResourcePlan, assignTasksFromResources } from "@/lib/engines/resource-engine";
+import { refreshProjectPriorities } from "@/lib/engines/priority-service";
 import { getMockFeedback } from "@/lib/discovery/mock-feedback";
 import type {
   AgentLog,
@@ -251,95 +255,56 @@ async function gatherContext(proposal: Proposal): Promise<ProposalContext> {
   return context;
 }
 
-async function analyzeImpact(proposal: Proposal): Promise<ImpactAnalysis> {
-  const targetBrain = await getTargetBrain(proposal);
-  const targetLabel = await getTargetLabel(proposal);
-  const arch = targetBrain.architecture;
-
-  const affected = arch.filter(
-    (a) =>
-      proposal.description.toLowerCase().includes(a.name.toLowerCase()) ||
-      proposal.title.toLowerCase().includes(a.type)
-  );
-
-  const branch = proposal.targetBranchId ? await dbGetBranch(proposal.targetBranchId) : null;
-  const allTasks = branch ? await dbGetTasks(branch.id) : [];
-  const existingTasks = allTasks.filter((t) => !["completed", "cancelled"].includes(t.status));
-
-  const impact: ImpactAnalysis = {
-    dependencyImpact: affected.flatMap((a) =>
-      a.dependencies.map((dep) => ({ target: dep, severity: "medium" as const, description: `Dependency of ${a.name} may need updates` }))
-    ),
-    architectureImpact: affected.map((a) => ({
-      target: a.name,
-      severity: "high" as const,
-      description: `Component in ${targetLabel} affected`,
-    })),
-    apiImpact: affected
-      .filter((a) => a.type === "api")
-      .map((a) => ({ target: a.name, severity: "medium" as const, description: "API contract may need versioning" })),
-    taskImpact: existingTasks.slice(0, 3).map((t) => ({
-      target: t.title,
-      severity: "low" as const,
-      description: branch?.status === "implementing" ? "Implementation task scope may change" : "Future task may be affected",
-    })),
-    costEstimate: affected.length > 2 ? "2-3 engineering weeks" : "3-5 engineering days",
-    riskLevel: affected.length > 2 ? "high" : affected.length > 0 ? "medium" : "low",
-    summary: `How "${proposal.title}" affects ${targetLabel}: ${affected.length} components impacted.${
-      branch?.status === "implementing" ? " Active implementation may need updating." : ""
-    }`,
-  };
-
-  proposal.impact = impact;
-  proposal.status = "impact_analyzed";
-  proposal.updatedAt = new Date().toISOString();
-  await dbSaveProposal(proposal);
-  await log("impact", "analyze", proposal.title, impact.summary, proposal.id);
-  return impact;
+async function analyzeImpact(proposal: Proposal, userId?: string): Promise<ImpactAnalysis> {
+  const fresh = await dbGetProposal(proposal.id);
+  if (!fresh) throw new Error("Proposal not found");
+  return analyzeAndStoreImpact(fresh, userId);
 }
 
 async function generateReview(proposal: Proposal): Promise<ReviewAnalysis> {
-  const targetBrain = await getTargetBrain(proposal);
-  const targetLabel = await getTargetLabel(proposal);
-  const branch = proposal.targetBranchId ? await dbGetBranch(proposal.targetBranchId) : null;
+  const fresh = await dbGetProposal(proposal.id);
+  if (!fresh?.impact?.structured) {
+    throw new Error("Review Agent requires LLM-generated impact analysis");
+  }
 
-  const pros = [
-    `Strengthens ${targetLabel}: ${proposal.title}`,
-    `Aligns with vision: ${targetBrain.vision.slice(0, 90)}...`,
-    proposal.impact?.riskLevel === "low" ? "Low-risk addition" : "Manageable impact with clear trade-offs",
-  ];
+  const structured = fresh.impact.structured;
+  const targetLabel = await getTargetLabel(fresh);
 
-  const cons = [
-    proposal.impact?.riskLevel === "high"
-      ? `Could significantly change how the team understands ${targetLabel}`
-      : `Adds scope on top of ${targetLabel}`,
-    branch?.status === "implementing"
-      ? "May disrupt in-progress implementation tasks"
-      : "Requires team alignment before committing",
+  const pros = structured.tradeOffs.map((t) => t.benefit).filter(Boolean);
+  if (pros.length === 0 && structured.summary) pros.push(structured.summary.slice(0, 120));
+
+  const cons = structured.tradeOffs.map((t) => t.cost).filter(Boolean);
+  const risks = structured.risks.map((r) => `${r.risk} (severity: ${r.severity}, likelihood: ${r.likelihood}) — mitigation: ${r.mitigation}`);
+  const tradeoffs = structured.tradeOffs.map(
+    (t) =>
+      `${t.benefit} ↔ ${t.cost}${t.affectedStakeholders.length ? ` [${t.affectedStakeholders.join(", ")}]` : ""}`
+  );
+
+  const questions = [
+    ...structured.implementationNotes.slice(0, 2).map((n) => `Implementation: ${n}`),
+    ...structured.rollbackConsiderations.slice(0, 1).map((r) => `Rollback: ${r}`),
+    `Does this align with ${targetLabel} given recommendation "${structured.recommendation}"?`,
   ];
 
   const review: ReviewAnalysis = {
-    pros,
-    cons,
-    risks: [
-      ...(proposal.impact?.dependencyImpact.length ? ["Downstream dependencies may break"] : []),
-      "Team understanding may drift if not discussed",
-    ],
-    tradeoffs: ["Stability vs. evolution", "Speed vs. thorough review"],
-    questions: [
-      `Does this make ${targetLabel} stronger?`,
-      "Are all affected team members aware?",
-      proposal.targetBranchId ? "How does this affect current implementation?" : "Should this go on a branch first?",
-    ],
-    suggestedReviewers: ["Tech Lead", "Backend Engineer", "Frontend Engineer"],
-    teamSummary: `Team summary for "${proposal.title}": ${pros.length} pros and ${cons.length} cons for ${targetLabel}. ${pros[0]}. Main concern: ${cons[0]}. Workers vote; manager accepts or declines.`,
+    pros: pros.length ? pros : [`Addresses: ${fresh.title}`],
+    cons: cons.length ? cons : ["Scope and trade-offs require team discussion"],
+    risks,
+    tradeoffs: tradeoffs.length ? tradeoffs : structured.dependencies.map((d) => d.dependency),
+    questions,
+    suggestedReviewers: [
+      ...new Set(
+        structured.tradeOffs.flatMap((t) => t.affectedStakeholders).filter(Boolean)
+      ),
+    ].slice(0, 5),
+    teamSummary: `${structured.summary} Impact Agent recommendation: ${structured.recommendation.replace(/_/g, " ")}. ${structured.reasoning.slice(0, 280)}${structured.reasoning.length > 280 ? "…" : ""}`,
   };
 
-  proposal.review = review;
-  proposal.status = "under_review";
-  proposal.updatedAt = new Date().toISOString();
-  await dbSaveProposal(proposal);
-  await log("review", "generate", proposal.title, review.teamSummary, proposal.id);
+  fresh.review = review;
+  fresh.status = "under_review";
+  fresh.updatedAt = new Date().toISOString();
+  await dbSaveProposal(fresh);
+  await log("review", "generate", fresh.title, review.teamSummary, fresh.id);
   return review;
 }
 
@@ -405,6 +370,8 @@ export async function managerAcceptProposal(proposalId: string, managerId: strin
 
   if (proposal.targetType === "main") {
     const branch = await createDecisionBranch(proposal);
+    await runPlanningCouncil(proposal.targetProjectId!, branch, proposal);
+    await log("planning", "council_run", proposal.title, "Planning Council generated roadmap after manager approval.", proposal.id);
     const logs = (await dbGetAgentLogs()).filter((l) => l.proposalId === proposalId);
     return { proposal, logs, branch };
   }
@@ -496,8 +463,17 @@ export async function startBranchImplementation(branchId: string, managerId: str
     allTasks.push(...(await generateImplementationTasks(p, branch)));
   }
 
-  await log("implementation", "start", branch.name, `${allTasks.length} sub-tasks created`, branch.seedProposalId);
-  return allTasks;
+  const resources = buildResourcePlan({
+    requiredSkills: ["Backend", "Frontend", "QA", "DevOps"],
+    sprints: [],
+    tasks: allTasks,
+  });
+  const assigned = assignTasksFromResources(allTasks, resources);
+  await dbSaveTasks(assigned);
+
+  await refreshProjectPriorities(branch.projectId);
+  await log("implementation", "start", branch.name, `${assigned.length} sub-tasks created with resource allocation`, branch.seedProposalId);
+  return assigned;
 }
 
 export async function mergeBranchToMain(branchId: string, managerId: string): Promise<DecisionBranch> {
@@ -677,8 +653,9 @@ export async function runProposalPipeline(
 ): Promise<PipelineResult> {
   const proposal = await createProposal(title, description, authorId, authorName, targetType, targetProjectId, targetBranchId);
   await gatherContext(proposal);
-  await analyzeImpact(proposal);
-  await generateReview(proposal);
+  await analyzeImpact(proposal, authorId);
+  const updated = await dbGetProposal(proposal.id);
+  if (updated) await generateReview(updated);
   const label = await getTargetLabel(proposal);
   await log("communication", "notify_slack", `New suggestion for ${label}: ${title}`, "Queued", proposal.id);
   const logs = (await dbGetAgentLogs()).filter((l) => l.proposalId === proposal.id);
@@ -688,7 +665,17 @@ export async function runProposalPipeline(
   } catch {
     /* registry sync is best-effort */
   }
-  return { proposal, logs };
+  return { proposal: (await dbGetProposal(proposal.id)) ?? proposal, logs };
+}
+
+/** Re-run LLM Impact Agent for an existing proposal */
+export async function rerunImpactAnalysis(proposalId: string, userId?: string): Promise<ImpactAnalysis> {
+  const proposal = await dbGetProposal(proposalId);
+  if (!proposal) throw new Error("Proposal not found");
+  const impact = await analyzeAndStoreImpact(proposal, userId);
+  const updated = await dbGetProposal(proposalId);
+  if (updated?.impact?.structured) await generateReview(updated);
+  return impact;
 }
 
 // ─── Queries ─────────────────────────────────────────────────────────────────
@@ -756,6 +743,7 @@ export async function runProductDiscovery(
 
   const featurePacks = runProductDiscoveryAgent(projectId, feedback);
   await dbSaveFeaturePacks(featurePacks);
+  await refreshProjectPriorities(projectId);
 
   await log(
     "product_discovery",

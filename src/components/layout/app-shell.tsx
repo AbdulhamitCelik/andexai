@@ -1,10 +1,37 @@
+"use client";
+
+import { cn } from "@/lib/utils";
 import { Sidebar } from "@/components/layout/sidebar";
+import { ShortcutsProvider, useShortcuts } from "@/lib/context/shortcuts-context";
+import { CommandPalette } from "@/components/shortcuts/command-palette";
+import { ShortcutsModal } from "@/components/shortcuts/shortcuts-modal";
+import { BeginnerGuide, BeginnerGuidePrompt } from "@/components/shortcuts/beginner-guide";
+import { KeyboardHintsBar } from "@/components/shortcuts/keyboard-hints-bar";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex min-h-screen">
-      <Sidebar />
-      <main className="flex-1 overflow-auto">{children}</main>
-    </div>
+    <ShortcutsProvider>
+      <ShellInner>{children}</ShellInner>
+    </ShortcutsProvider>
+  );
+}
+
+function ShellInner({ children }: { children: React.ReactNode }) {
+  const { sidebarCollapsed } = useShortcuts();
+
+  return (
+    <>
+      <div className="flex min-h-screen">
+        <Sidebar collapsed={sidebarCollapsed} />
+        <main className={cn("flex-1 overflow-auto pb-10 transition-all duration-300", sidebarCollapsed && "md:ml-0")}>
+          {children}
+        </main>
+      </div>
+      <CommandPalette />
+      <ShortcutsModal />
+      <BeginnerGuide />
+      <BeginnerGuidePrompt />
+      <KeyboardHintsBar />
+    </>
   );
 }

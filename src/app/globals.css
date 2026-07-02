@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 @layer base {
-  :root {
+  .dark {
     --background: 222 47% 5%;
     --foreground: 210 40% 98%;
     --card: 222 44% 8%;
@@ -23,6 +23,26 @@
     --ring: 217 91% 60%;
     --radius: 0.65rem;
   }
+
+  .light {
+    --background: 210 40% 98%;
+    --foreground: 222 47% 11%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+    --primary: 217 91% 50%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 30% 94%;
+    --secondary-foreground: 222 47% 11%;
+    --muted: 210 30% 94%;
+    --muted-foreground: 215 16% 40%;
+    --accent: 210 30% 92%;
+    --accent-foreground: 222 47% 11%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214 20% 88%;
+    --input: 214 20% 88%;
+    --ring: 217 91% 50%;
+  }
 }
 
 @layer base {
@@ -30,11 +50,35 @@
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground antialiased;
+    @apply bg-background text-foreground antialiased transition-colors duration-300;
+    font-family: var(--font-inter), system-ui, sans-serif;
     background-image:
-      radial-gradient(60rem 60rem at 100% -10%, hsl(217 91% 60% / 0.08), transparent 60%),
-      radial-gradient(50rem 50rem at -10% 110%, hsl(265 85% 60% / 0.07), transparent 55%);
+      radial-gradient(60rem 60rem at 100% -10%, hsl(350 60% 45% / 0.06), transparent 60%),
+      radial-gradient(50rem 50rem at -10% 110%, hsl(217 91% 60% / 0.08), transparent 55%),
+      radial-gradient(40rem 40rem at 50% 50%, hsl(265 85% 60% / 0.04), transparent 70%);
     background-attachment: fixed;
+  }
+
+  .light body,
+  html.light body {
+    background-image:
+      radial-gradient(60rem 60rem at 100% -10%, hsl(350 60% 70% / 0.08), transparent 60%),
+      radial-gradient(50rem 50rem at -10% 110%, hsl(217 91% 60% / 0.06), transparent 55%);
+  }
+
+  html.light ::-webkit-scrollbar-thumb {
+    background: hsl(214 20% 75%);
+    background-clip: content-box;
+  }
+  html.light ::-webkit-scrollbar-thumb:hover {
+    background: hsl(214 20% 65%);
+    background-clip: content-box;
+  }
+
+  .font-display {
+    font-family: Georgia, "Times New Roman", var(--font-inter), serif;
+    font-weight: 300;
+    letter-spacing: 0.05em;
   }
 }
 
@@ -75,6 +119,57 @@
   }
   .animate-pulse-dot {
     animation: pulse-dot 2s ease-in-out infinite;
+  }
+
+  /* Japanese-inspired lifecycle aesthetic */
+  .sakura-border {
+    box-shadow:
+      0 0 0 1px hsl(350 60% 55% / 0.12),
+      0 12px 40px -16px hsl(350 60% 45% / 0.2);
+  }
+
+  .sakura-glow {
+    box-shadow: 0 0 24px -4px hsl(350 70% 60% / 0.35);
+  }
+
+  .splash-overlay {
+    background: linear-gradient(165deg, hsl(222 47% 4%) 0%, hsl(340 35% 12%) 45%, hsl(222 47% 6%) 100%);
+  }
+
+  .splash-ink {
+    background:
+      radial-gradient(ellipse 80% 60% at 50% 40%, hsl(350 50% 30% / 0.25), transparent 70%),
+      radial-gradient(ellipse 50% 40% at 20% 80%, hsl(217 91% 40% / 0.15), transparent 60%);
+    animation: ink-breathe 6s ease-in-out infinite;
+  }
+
+  .sakura-petal {
+    top: -5%;
+    background: radial-gradient(circle at 30% 30%, hsl(350 80% 85%), hsl(350 60% 70%));
+    opacity: 0;
+    animation-name: sakura-fall;
+    animation-timing-function: linear;
+    animation-iteration-count: infinite;
+  }
+
+  .animate-splash-rise {
+    animation: splash-rise 1.2s ease both;
+  }
+
+  .splash-delay-1 { animation-delay: 0.15s; }
+  .splash-delay-2 { animation-delay: 0.35s; }
+  .splash-delay-3 { animation-delay: 0.55s; }
+  .splash-delay-4 { animation-delay: 0.75s; }
+
+  @keyframes ink-breathe {
+    0%, 100% { opacity: 0.92; }
+    50% { opacity: 1; }
+  }
+
+  @keyframes sakura-fall {
+    0% { transform: translateY(-10vh) rotate(0deg); opacity: 0; }
+    10% { opacity: 0.85; }
+    100% { transform: translateY(110vh) rotate(720deg); opacity: 0; }
   }
 }
 

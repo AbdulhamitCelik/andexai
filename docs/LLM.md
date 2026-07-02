@@ -23,9 +23,11 @@ cp .env.example .env.local
 | ---------- | ------------------- | -------------------------------------------------------- |
 | Groq       | `GROQ_API_KEY`      | <https://console.groq.com/keys>                          |
 | Cerebras   | `CEREBRAS_API_KEY`  | <https://cloud.cerebras.ai>                              |
+| Mistral    | `MISTRAL_API_KEY`   | <https://console.mistral.ai/api-keys>                    |
+| SambaNova  | `SAMBANOVA_API_KEY` | <https://cloud.sambanova.ai>                             |
+| Cohere     | `COHERE_API_KEY`    | <https://dashboard.cohere.com/api-keys>                  |
 | OpenRouter | `OPENROUTER_API_KEY`| <https://openrouter.ai/keys>                             |
 | NVIDIA NIM | `NVIDIA_API_KEY`    | <https://build.nvidia.com>                               |
-| Mistral    | `MISTRAL_API_KEY`   | <https://console.mistral.ai/api-keys>                    |
 
 `.env.local` is gitignored — real keys never get committed.
 
@@ -71,7 +73,7 @@ await chat("Ping", { provider: "groq" });
 
 | Option        | Type                  | Default        | Notes                              |
 | ------------- | --------------------- | -------------- | ---------------------------------- |
-| `provider`    | `string`              | first configured | Provider id: `groq`, `cerebras`, `openrouter`, `nvidia`, `mistral` |
+| `provider`    | `string`              | first configured | Provider id: `groq`, `cerebras`, `mistral`, `sambanova`, `cohere`, `openrouter`, `nvidia` |
 | `model`       | `string`              | provider default | Override the model                 |
 | `system`      | `string`              | —              | Prepended system prompt            |
 | `temperature` | `number`              | `0.7`          | 0–2                                |

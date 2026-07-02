@@ -1,6 +1,7 @@
 import mongoose, { Schema, model, models } from "mongoose";
 import type {
   AgentLog,
+  CouncilRun,
   DecisionBranch,
   DriftAlert,
   FeaturePack,
@@ -10,6 +11,7 @@ import type {
   PermissionAuditLog,
   ProjectBrain,
   Proposal,
+  PriorityScoreRecord,
 } from "@/lib/types";
 
 const ProjectSchema = new Schema<ProjectBrain>(
@@ -204,6 +206,49 @@ export const GovernedMemoryModel =
 export const PermissionAuditLogModel =
   models.PermissionAuditLog ?? model<PermissionAuditLog>("PermissionAuditLog", PermissionAuditLogSchema);
 
+const CouncilRunSchema = new Schema<CouncilRun>(
+  {
+    id: { type: String, required: true, unique: true, index: true },
+    councilId: { type: String, index: true },
+    projectId: { type: String, index: true },
+    branchId: String,
+    proposalId: String,
+    status: String,
+    agents: [String],
+    report: Schema.Types.Mixed,
+    createdAt: String,
+    updatedAt: String,
+  },
+  { collection: "council_runs" }
+);
+
+export const CouncilRunModel = models.CouncilRun ?? model<CouncilRun>("CouncilRun", CouncilRunSchema);
+
+const PriorityScoreSchema = new Schema<PriorityScoreRecord>(
+  {
+    id: { type: String, required: true, unique: true, index: true },
+    entityType: { type: String, index: true },
+    entityId: { type: String, index: true },
+    projectId: { type: String, index: true },
+    title: String,
+    overallScore: { type: Number, index: true },
+    confidenceScore: Number,
+    riskScore: Number,
+    businessValue: Number,
+    complexity: Number,
+    dimensions: [Schema.Types.Mixed],
+    summary: String,
+    recommendedAction: String,
+    reasoning: [String],
+    supportingEvidence: [String],
+    updatedAt: String,
+  },
+  { collection: "priority_scores" }
+);
+
+export const PriorityScoreModel =
+  models.PriorityScore ?? model<PriorityScoreRecord>("PriorityScore", PriorityScoreSchema);
+
 export const COLLECTIONS = [
   "projects",
   "proposals",
@@ -215,4 +260,6 @@ export const COLLECTIONS = [
   "feature_packs",
   "governed_memories",
   "permission_audit_logs",
+  "council_runs",
+  "priority_scores",
 ] as const;

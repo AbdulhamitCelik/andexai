@@ -6,23 +6,6 @@ const PROMPT = "Say hello in exactly one short sentence.";
 
 const providers = [
   {
-    name: "OpenRouter",
-    key: process.env.OPENROUTER_API_KEY,
-    baseUrl: process.env.OPENROUTER_BASE_URL || "https://openrouter.ai/api/v1",
-    model: "openai/gpt-4o",
-    extraHeaders: {
-      ...(process.env.OPENROUTER_SITE_URL && { "HTTP-Referer": process.env.OPENROUTER_SITE_URL }),
-      ...(process.env.OPENROUTER_SITE_NAME && { "X-Title": process.env.OPENROUTER_SITE_NAME }),
-    },
-  },
-  {
-    name: "NVIDIA NIM",
-    key: process.env.NVIDIA_API_KEY,
-    baseUrl: process.env.NVIDIA_BASE_URL || "https://integrate.api.nvidia.com/v1",
-    model: "meta/llama-3.1-8b-instruct",
-    extraHeaders: {},
-  },
-  {
     name: "Groq",
     key: process.env.GROQ_API_KEY,
     baseUrl: process.env.GROQ_BASE_URL || "https://api.groq.com/openai/v1",
@@ -44,17 +27,34 @@ const providers = [
     extraHeaders: {},
   },
   {
-    name: "SambaNova Cloud",
+    name: "SambaNova",
     key: process.env.SAMBANOVA_API_KEY,
     baseUrl: process.env.SAMBANOVA_BASE_URL || "https://api.sambanova.ai/v1",
-    model: "Meta-Llama-3.3-70B-Instruct",
+    model: "Meta-Llama-3.1-8B-Instruct",
     extraHeaders: {},
   },
   {
     name: "Cohere",
     key: process.env.COHERE_API_KEY,
     baseUrl: process.env.COHERE_BASE_URL || "https://api.cohere.ai/compatibility/v1",
-    model: "command-r-08-2024",
+    model: "command-r7b-12-2024",
+    extraHeaders: {},
+  },
+  {
+    name: "OpenRouter",
+    key: process.env.OPENROUTER_API_KEY,
+    baseUrl: process.env.OPENROUTER_BASE_URL || "https://openrouter.ai/api/v1",
+    model: "openai/gpt-4o",
+    extraHeaders: {
+      ...(process.env.OPENROUTER_SITE_URL && { "HTTP-Referer": process.env.OPENROUTER_SITE_URL }),
+      ...(process.env.OPENROUTER_SITE_NAME && { "X-Title": process.env.OPENROUTER_SITE_NAME }),
+    },
+  },
+  {
+    name: "NVIDIA NIM",
+    key: process.env.NVIDIA_API_KEY,
+    baseUrl: process.env.NVIDIA_BASE_URL || "https://integrate.api.nvidia.com/v1",
+    model: "meta/llama-3.1-8b-instruct",
     extraHeaders: {},
   },
 ];

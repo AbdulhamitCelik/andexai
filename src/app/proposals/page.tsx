@@ -31,6 +31,7 @@ function ProposalsContent() {
   const preselect = searchParams.get("project");
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [targets, setTargets] = useState<SuggestionTarget[]>([]);
+  const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -41,12 +42,24 @@ function ProposalsContent() {
     fetch("/api/proposals")
       .then((r) => r.json())
       .then((d) => {
-        setProposals(d.proposals);
+        if (d.error) {
+          setError(d.error);
+          setProposals([]);
+          setTargets([]);
+          return;
+        }
+        setError(null);
+        setProposals(d.proposals ?? []);
         setTargets(d.targets ?? []);
         if (!target && d.targets?.length) {
           const pre = preselect ? d.targets.find((t: SuggestionTarget) => t.value === `project:${preselect}`) : null;
           setTarget(pre?.value ?? d.targets[0].value);
         }
+      })
+      .catch(() => {
+        setError("Failed to load suggestions. Check your database connection.");
+        setProposals([]);
+        setTargets([]);
       });
 
   useEffect(() => {
@@ -93,7 +106,13 @@ function ProposalsContent() {
           </Button>
         </div>
 
-        {targets.length === 0 && (
+        {error && (
+          <Card className="border-amber-500/30">
+            <CardContent className="p-4 text-sm text-amber-200">{error}</CardContent>
+          </Card>
+        )}
+
+        {targets.length === 0 && !error && (
           <Card className="border-amber-500/30">
             <CardContent className="p-4 text-sm text-muted-foreground">
               No projects yet. The manager must create a project in Main Ideas first.

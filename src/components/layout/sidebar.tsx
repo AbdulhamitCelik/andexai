@@ -19,13 +19,26 @@ import {
   ClipboardList,
   Lightbulb,
   Shield,
+  Workflow,
+  Moon,
+  Sun,
+  Command,
+  BookOpen,
+  PanelLeftClose,
+  PanelLeft,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { useTheme } from "@/lib/context/theme-context";
+import { useShortcuts } from "@/lib/context/shortcuts-context";
+import { Button } from "@/components/ui/button";
 
 const nav = [
   {
     section: "Overview",
-    items: [{ href: "/", label: "Dashboard", icon: LayoutDashboard }],
+    items: [
+      { href: "/", label: "Dashboard", icon: LayoutDashboard },
+      { href: "/lifecycle", label: "Lifecycle OS", icon: Workflow },
+    ],
   },
   {
     section: "Governance",
@@ -54,29 +67,51 @@ const nav = [
   },
 ];
 
-export function Sidebar() {
+export function Sidebar({ collapsed = false }: { collapsed?: boolean }) {
   const pathname = usePathname();
   const { currentUser, setCurrentUser, isManager } = useUser();
+  const { setCommandOpen, setShortcutsOpen, setGuideOpen, toggleSidebar } = useShortcuts();
 
   const managers = TEAM_MEMBERS.filter((m) => m.role === "manager");
   const workers = TEAM_MEMBERS.filter((m) => m.role === "worker");
 
   return (
-    <aside className="flex h-screen w-64 shrink-0 flex-col border-r border-border/70 glass">
-      <div className="border-b border-border/70 p-6">
+    <aside
+      className={cn(
+        "flex h-screen shrink-0 flex-col border-r border-border/70 glass transition-all duration-300",
+        collapsed ? "w-[4.5rem]" : "w-64"
+      )}
+    >
+      <div className={cn("border-b border-border/70", collapsed ? "p-3" : "p-6")}>
         <Link href="/" className="flex items-center gap-2">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-violet-500 shadow-lg shadow-primary/30">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-violet-500 shadow-lg shadow-primary/30">
             <Sparkles className="h-5 w-5 text-white" />
           </div>
-          <div>
-            <h1 className="text-lg font-bold leading-none tracking-tight">
-              <span className="text-gradient">Andex</span> AI
-            </h1>
-            <p className="mt-1 text-[11px] text-muted-foreground">Decisions, version-controlled</p>
-          </div>
+          {!collapsed && (
+            <div>
+              <h1 className="text-lg font-bold leading-none tracking-tight">
+                <span className="text-gradient">Andex</span> AI
+              </h1>
+              <p className="mt-1 text-[11px] text-muted-foreground tracking-wide">AI councils for product development</p>
+            </div>
+          )}
         </Link>
+        {!collapsed && (
+          <div className="mt-3 flex gap-1">
+            <Button variant="outline" size="sm" className="flex-1 h-8 text-[10px] gap-1 px-2" onClick={() => setCommandOpen(true)}>
+              <Command className="h-3 w-3" /> Ctrl+K
+            </Button>
+            <Button variant="ghost" size="sm" className="h-8 w-8 p-0" title="Quick start" onClick={() => setGuideOpen(true)}>
+              <BookOpen className="h-3.5 w-3.5" />
+            </Button>
+            <Button variant="ghost" size="sm" className="h-8 w-8 p-0" title="Shortcuts" onClick={() => setShortcutsOpen(true)}>
+              <span className="text-[10px] font-mono">?</span>
+            </Button>
+          </div>
+        )}
       </div>
 
+      {!collapsed && (
       <div className="border-b border-border/70 p-4 space-y-2">
         <p className="text-[10px] uppercase tracking-wider text-muted-foreground flex items-center gap-1">
           <User className="h-3 w-3" /> Team member
@@ -107,13 +142,16 @@ export function Sidebar() {
           Memory: {currentUser.memoryRole}
         </Badge>
       </div>
+      )}
 
       <nav className="flex-1 space-y-6 overflow-y-auto p-4">
         {nav.map((group) => (
           <div key={group.section}>
+            {!collapsed && (
             <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">
               {group.section}
             </p>
+            )}
             <div className="space-y-1">
               {group.items.map((item) => {
                 const active = pathname === item.href || pathname.startsWith(item.href + "/");
@@ -121,18 +159,20 @@ export function Sidebar() {
                   <Link
                     key={item.href}
                     href={item.href}
+                    title={collapsed ? item.label : undefined}
                     className={cn(
-                      "group relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors",
+                      "group relative flex items-center rounded-lg text-sm transition-colors",
+                      collapsed ? "justify-center px-2 py-2.5" : "gap-3 px-3 py-2",
                       active
                         ? "bg-primary/10 text-primary"
                         : "text-muted-foreground hover:bg-accent/60 hover:text-foreground"
                     )}
                   >
-                    {active && (
+                    {active && !collapsed && (
                       <span className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-full bg-primary" />
                     )}
-                    <item.icon className="h-4 w-4" />
-                    {item.label}
+                    <item.icon className="h-4 w-4 shrink-0" />
+                    {!collapsed && item.label}
                   </Link>
                 );
               })}
@@ -141,8 +181,25 @@ export function Sidebar() {
         ))}
       </nav>
 
-      <LlmStatus />
+      {!collapsed && <LlmStatus />}
+      <div className="border-t border-border/70 p-4 space-y-2">
+        <ThemeToggle collapsed={collapsed} />
+        <Button variant="ghost" size="sm" className={cn("w-full gap-2", collapsed && "px-0")} onClick={toggleSidebar}>
+          {collapsed ? <PanelLeft className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
+          {!collapsed && "Collapse sidebar"}
+        </Button>
+      </div>
     </aside>
+  );
+}
+
+function ThemeToggle({ collapsed }: { collapsed?: boolean }) {
+  const { theme, toggleTheme } = useTheme();
+  return (
+    <Button variant="outline" size="sm" className={cn("w-full gap-2", collapsed && "px-2")} onClick={toggleTheme}>
+      {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+      {!collapsed && (theme === "dark" ? "Light mode" : "Dark mode")}
+    </Button>
   );
 }
 

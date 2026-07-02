@@ -62,9 +62,11 @@ Brain* widget starts answering).
 | ---------- | ------------------- | ------------------------------------- |
 | Groq       | `GROQ_API_KEY`      | <https://console.groq.com/keys>       |
 | Cerebras   | `CEREBRAS_API_KEY`  | <https://cloud.cerebras.ai>          |
+| Mistral    | `MISTRAL_API_KEY`   | <https://console.mistral.ai/api-keys> |
+| SambaNova  | `SAMBANOVA_API_KEY` | <https://cloud.sambanova.ai>          |
+| Cohere     | `COHERE_API_KEY`    | <https://dashboard.cohere.com/api-keys> |
 | OpenRouter | `OPENROUTER_API_KEY`| <https://openrouter.ai/keys>          |
 | NVIDIA NIM | `NVIDIA_API_KEY`    | <https://build.nvidia.com>            |
-| Mistral    | `MISTRAL_API_KEY`   | <https://console.mistral.ai/api-keys> |
 
 Verify your keys:
 

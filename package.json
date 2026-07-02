@@ -3,14 +3,16 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
+    "dev": "node --use-system-ca ./node_modules/next/dist/bin/next dev",
+    "build": "node --use-system-ca ./node_modules/next/dist/bin/next build",
+    "start": "node --use-system-ca ./node_modules/next/dist/bin/next start",
     "lint": "next lint",
     "db:init": "curl -X POST http://localhost:3000/api/db/init",
     "db:push": "prisma db push",
     "db:seed": "tsx prisma/seed.ts",
-    "test:llm": "node --env-file=.env.local scripts/test-llm.mjs",
+    "test:llm": "node --use-system-ca --env-file=.env.local scripts/test-llm.mjs",
+    "test:mongo": "node --use-system-ca --env-file=.env.local scripts/test-mongo.mjs",
+    "test:mongo:diag": "node --use-system-ca --env-file=.env.local scripts/test-mongo-diagnose.mjs",
     "test:scenarios": "tsx scripts/test-scenarios.ts"
   },
   "dependencies": {

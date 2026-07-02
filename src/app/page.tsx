@@ -6,8 +6,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { ProjectBrain, Proposal, AgentLog, DriftAlert } from "@/lib/types";
-import { GitBranch, FileText, AlertTriangle, ArrowRight, FolderOpen } from "lucide-react";
+import { GitBranch, FileText, AlertTriangle, ArrowRight, FolderOpen, Workflow } from "lucide-react";
 import { AskBrain } from "@/components/ask-brain";
+import { BrainRankingsPanel, DecisionIntelligencePanel } from "@/components/intelligence/intelligence-panel";
+import { PageLoader } from "@/components/ui/loading-state";
+import { useShortcuts } from "@/lib/context/shortcuts-context";
 import Link from "next/link";
 
 interface DashboardData {
@@ -23,49 +26,99 @@ interface DashboardData {
   };
   agentLogs: AgentLog[];
   driftAlerts: DriftAlert[];
+  error?: string;
 }
 
 function DashboardContent() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [intel, setIntel] = useState<{ rankings?: unknown; intelligence?: unknown } | null>(null);
+  const { refreshKey } = useShortcuts();
 
-  useEffect(() => {
+  const load = () => {
+    setLoading(true);
     fetch("/api/project")
       .then((r) => r.json())
       .then((d) => {
-        if (d && Array.isArray(d.projects)) setData(d);
-        else setError(d?.error ?? "Failed to load dashboard data.");
+        if (d.error) {
+          setData({
+            projects: [],
+            proposals: [],
+            stats: {
+              projects: 0,
+              openProposals: 0,
+              openBranches: 0,
+              implementing: 0,
+              pendingTasks: 0,
+              driftAlerts: 0,
+            },
+            agentLogs: [],
+            driftAlerts: [],
+            error: d.error,
+          });
+          return;
+        }
+        setData(d);
+        const pid = d.projects?.[0]?.id;
+        if (pid) {
+          fetch(`/api/priority?projectId=${pid}`)
+            .then((r) => r.json())
+            .then(setIntel);
+        }
       })
-      .catch(() => setError("Failed to load dashboard data."))
+      .catch(() => {
+        setData({
+          projects: [],
+          proposals: [],
+          stats: {
+            projects: 0,
+            openProposals: 0,
+            openBranches: 0,
+            implementing: 0,
+            pendingTasks: 0,
+            driftAlerts: 0,
+          },
+          agentLogs: [],
+          driftAlerts: [],
+          error: "Failed to load dashboard data",
+        });
+      })
       .finally(() => setLoading(false));
-  }, []);
+  };
+
+  useEffect(() => {
+    load();
+  }, [refreshKey]);
 
   if (loading) {
-    return (
-      <div className="flex h-full items-center justify-center p-8">
-        <p className="text-muted-foreground">Loading Andex AI...</p>
-      </div>
-    );
+    return <PageLoader message="Loading Decision Intelligence OS…" />;
   }
 
-  if (!data) {
-    return (
-      <div className="flex h-full items-center justify-center p-8">
-        <div className="max-w-md space-y-2 text-center">
-          <AlertTriangle className="mx-auto h-8 w-8 text-destructive" />
-          <p className="font-semibold">Backend not available</p>
-          <p className="text-sm text-muted-foreground">{error ?? "Unknown error."}</p>
-        </div>
-      </div>
-    );
-  }
+  if (!data) return null;
 
-  const { projects, proposals, stats, agentLogs, driftAlerts } = data;
+  const projects = data.projects ?? [];
+  const proposals = data.proposals ?? [];
+  const agentLogs = data.agentLogs ?? [];
+  const driftAlerts = data.driftAlerts ?? [];
+  const stats = data.stats ?? {
+    projects: projects.length,
+    openProposals: 0,
+    openBranches: 0,
+    implementing: 0,
+    pendingTasks: 0,
+    driftAlerts: driftAlerts.length,
+  };
   const primaryProject = projects[0];
 
   return (
     <div className="animate-in space-y-8 p-8">
+      {data.error && (
+        <Card className="border-amber-500/30">
+          <CardContent className="p-4 text-sm text-amber-200">
+            {data.error}
+          </CardContent>
+        </Card>
+      )}
       <div className="flex items-start justify-between">
         <div>
           <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-primary/80">
@@ -88,8 +141,35 @@ function DashboardContent() {
       </div>
 
       {primaryProject && (
+        <div className="grid gap-6 lg:grid-cols-2">
+          <BrainRankingsPanel rankings={intel?.rankings as Parameters<typeof BrainRankingsPanel>[0]["rankings"]} />
+          <DecisionIntelligencePanel intelligence={intel?.intelligence as Parameters<typeof DecisionIntelligencePanel>[0]["intelligence"]} />
+        </div>
+      )}
+
+      {primaryProject && (
         <AskBrain projectId={primaryProject.id} projectName={primaryProject.name} vision={primaryProject.vision} />
       )}
+
+      <Link href="/lifecycle">
+        <Card className="glass sakura-border hover:glow-primary transition-all cursor-pointer overflow-hidden">
+          <CardContent className="flex items-center justify-between p-6">
+            <div className="flex items-center gap-4">
+              <div className="rounded-lg bg-rose-500/15 p-3">
+                <Workflow className="h-6 w-6 text-rose-300" />
+              </div>
+              <div>
+                <p className="font-display text-[11px] text-rose-300/70 tracking-widest uppercase">Product lifecycle</p>
+                <p className="font-semibold">Product Operating System</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Discovery → Proposal → Approval → Planning → Implementation → Testing → Evaluation → Learning
+                </p>
+              </div>
+            </div>
+            <ArrowRight className="h-5 w-5 text-muted-foreground" />
+          </CardContent>
+        </Card>
+      </Link>
 
       <div className="grid gap-4 md:grid-cols-4">
         <StatCard icon={FolderOpen} label="Projects" value={stats.projects} />

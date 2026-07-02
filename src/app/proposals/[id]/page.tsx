@@ -10,6 +10,8 @@ import type { Proposal } from "@/lib/types";
 import Link from "next/link";
 import { ArrowLeft, Check, X, MessageSquare, ThumbsUp, ThumbsDown } from "lucide-react";
 import type { VoteType } from "@/lib/types";
+import { ImpactAnalysisPanel } from "@/components/proposals/impact-analysis-panel";
+import { Loader2, RefreshCw } from "lucide-react";
 
 const COMMENT_VOTES: VoteType[] = ["approve_with_comments", "needs_discussion"];
 
@@ -21,6 +23,7 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ id: s
   const [pendingVote, setPendingVote] = useState<VoteType | null>(null);
   const [voteComment, setVoteComment] = useState("");
   const [submittingVote, setSubmittingVote] = useState(false);
+  const [rerunningImpact, setRerunningImpact] = useState(false);
 
   const load = () =>
     fetch(`/api/proposals/${id}`)
@@ -74,6 +77,25 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ id: s
       return;
     }
     submitVote(pendingVote, voteComment);
+  };
+
+  const rerunImpact = async () => {
+    setRerunningImpact(true);
+    try {
+      const res = await fetch(`/api/proposals/${id}/impact`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: currentUser.id, projectId: proposal?.projectId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Impact analysis failed");
+      if (data.proposal) setProposal(data.proposal);
+      else load();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Impact analysis failed");
+    } finally {
+      setRerunningImpact(false);
+    }
   };
 
   const managerAction = async (action: "accept" | "decline") => {
@@ -140,17 +162,19 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ id: s
         )}
 
         {proposal.impact && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Impact Analysis</CardTitle>
-            </CardHeader>
-            <CardContent className="text-sm space-y-2">
-              <p>{proposal.impact.summary}</p>
-              <Badge variant={proposal.impact.riskLevel === "high" ? "destructive" : "warning"}>
-                Risk: {proposal.impact.riskLevel}
-              </Badge>
-            </CardContent>
-          </Card>
+          <div className="space-y-2">
+            <div className="flex justify-end">
+              <Button size="sm" variant="outline" onClick={rerunImpact} disabled={rerunningImpact}>
+                {rerunningImpact ? (
+                  <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                ) : (
+                  <RefreshCw className="mr-1 h-3 w-3" />
+                )}
+                Re-run Impact Agent
+              </Button>
+            </div>
+            <ImpactAnalysisPanel impact={proposal.impact} />
+          </div>
         )}
 
         {proposal.votes && proposal.votes.length > 0 && (
