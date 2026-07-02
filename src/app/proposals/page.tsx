@@ -186,12 +186,12 @@ function ProposalsContent() {
           {proposals.map((p) => (
             <Link key={p.id} href={`/proposals/${p.id}`} className="block">
               <Card className="hover:bg-accent/30 transition-colors cursor-pointer">
-                <CardContent className="flex items-center justify-between p-4">
-                  <div>
-                    <h3 className="font-medium">{p.title}</h3>
-                    <p className="text-xs text-muted-foreground">{p.context?.targetLabel ?? p.targetType}</p>
+                <CardContent className="flex items-start justify-between gap-3 p-4">
+                  <div className="min-w-0 flex-1">
+                    <h3 className="font-medium break-words line-clamp-2">{p.title}</h3>
+                    <p className="mt-1 text-xs text-muted-foreground truncate">{p.context?.targetLabel ?? p.targetType}</p>
                   </div>
-                  <Badge>{p.status.replace(/_/g, " ")}</Badge>
+                  <Badge className="shrink-0">{p.status.replace(/_/g, " ")}</Badge>
                 </CardContent>
               </Card>
             </Link>

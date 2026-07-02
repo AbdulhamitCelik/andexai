@@ -231,13 +231,15 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ id: s
           <ArrowLeft className="h-4 w-4" /> Back to suggestions
         </Link>
 
-        <div>
-          <div className="flex items-center gap-3 flex-wrap">
-            <h1 className="text-2xl font-bold">{proposal.title}</h1>
-            <Badge>{proposal.status.replace(/_/g, " ")}</Badge>
-            <Badge variant="secondary">adds to {proposal.context?.targetLabel ?? proposal.targetType}</Badge>
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-start gap-3">
+            <h1 className="min-w-0 flex-1 text-2xl font-bold break-words">{proposal.title}</h1>
+            <div className="flex shrink-0 flex-wrap gap-2">
+              <Badge>{proposal.status.replace(/_/g, " ")}</Badge>
+              <Badge variant="secondary">adds to {proposal.context?.targetLabel ?? proposal.targetType}</Badge>
+            </div>
           </div>
-          <p className="mt-2 text-muted-foreground">{proposal.description}</p>
+          <p className="mt-2 break-words text-muted-foreground">{proposal.description}</p>
           <p className="mt-1 text-xs text-muted-foreground">by {proposal.authorName}</p>
         </div>
 

@@ -230,11 +230,11 @@ function DashboardContent() {
                 href={`/proposals/${p.id}`}
                 className="block rounded-md border border-border p-3 hover:bg-accent/50 transition-colors"
               >
-                <div className="flex items-center justify-between">
-                  <span className="font-medium text-sm">{p.title}</span>
-                  <Badge variant="secondary">{p.status.replace(/_/g, " ")}</Badge>
+                <div className="flex items-start justify-between gap-3">
+                  <span className="min-w-0 flex-1 font-medium text-sm break-words line-clamp-2">{p.title}</span>
+                  <Badge variant="secondary" className="shrink-0">{p.status.replace(/_/g, " ")}</Badge>
                 </div>
-                <p className="mt-1 text-xs text-muted-foreground line-clamp-1">{p.description}</p>
+                <p className="mt-1 text-xs text-muted-foreground line-clamp-2 break-words">{p.description}</p>
               </Link>
             ))}
             {proposals.length === 0 && (
