@@ -11,17 +11,35 @@ import { AlertTriangle } from "lucide-react";
 export default function DriftPage() {
   const [alerts, setAlerts] = useState<DriftAlert[]>([]);
   const [scanning, setScanning] = useState(false);
+  const [loadError, setLoadError] = useState(false);
 
-  const load = () => fetch("/api/drift").then((r) => r.json()).then((d) => setAlerts(d.alerts));
+  const load = () =>
+    fetch("/api/drift")
+      .then((r) => r.json())
+      .then((d) => {
+        setAlerts(d.alerts ?? []);
+        setLoadError(false);
+      })
+      .catch(() => setLoadError(true));
 
   useEffect(() => { load(); }, []);
 
   const scan = async () => {
     setScanning(true);
-    const res = await fetch("/api/drift", { method: "POST" });
-    const data = await res.json();
-    setAlerts(data.alerts);
-    setScanning(false);
+    try {
+      const res = await fetch("/api/drift", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error ?? "Drift scan failed");
+        return;
+      }
+      setAlerts(data.alerts ?? []);
+      setLoadError(false);
+    } catch {
+      alert("Drift scan failed — is the backend running?");
+    } finally {
+      setScanning(false);
+    }
   };
 
   return (
@@ -49,7 +67,13 @@ export default function DriftPage() {
           </CardContent>
         </Card>
 
-        {alerts.length === 0 ? (
+        {loadError ? (
+          <Card className="border-red-500/30">
+            <CardContent className="p-4 text-sm text-red-400">
+              Failed to load drift alerts — check that the backend is running, then refresh.
+            </CardContent>
+          </Card>
+        ) : alerts.length === 0 ? (
           <Card>
             <CardContent className="flex items-center gap-3 p-6 text-sm text-muted-foreground">
               <AlertTriangle className="h-5 w-5 text-emerald-400" />

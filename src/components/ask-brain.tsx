@@ -9,7 +9,7 @@ import { useUser } from "@/lib/context/user-context";
 import Link from "next/link";
 
 /** Permission-governed Ask Brain — memory filtered BEFORE LLM retrieval */
-export function AskBrain({ projectId }: { projectId: string; projectName?: string; vision?: string }) {
+export function AskBrain({ projectId }: { projectId: string }) {
   const { currentUser } = useUser();
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState("");

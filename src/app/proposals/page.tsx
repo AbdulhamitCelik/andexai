@@ -36,18 +36,21 @@ function ProposalsContent() {
   const [description, setDescription] = useState("");
   const [target, setTarget] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [loadError, setLoadError] = useState(false);
 
   const load = () =>
     fetch("/api/proposals")
       .then((r) => r.json())
       .then((d) => {
-        setProposals(d.proposals);
+        setProposals(d.proposals ?? []);
         setTargets(d.targets ?? []);
+        setLoadError(false);
         if (!target && d.targets?.length) {
           const pre = preselect ? d.targets.find((t: SuggestionTarget) => t.value === `project:${preselect}`) : null;
           setTarget(pre?.value ?? d.targets[0].value);
         }
-      });
+      })
+      .catch(() => setLoadError(true));
 
   useEffect(() => {
     load();
@@ -61,21 +64,26 @@ function ProposalsContent() {
       return;
     }
     setSubmitting(true);
-    const res = await fetch("/api/proposals", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title, description, authorId: currentUser.id, authorName: currentUser.name, target }),
-    });
-    const data = await res.json();
-    setSubmitting(false);
-    if (!res.ok) {
-      alert(data.error ?? "Failed to submit");
-      return;
+    try {
+      const res = await fetch("/api/proposals", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title, description, authorId: currentUser.id, authorName: currentUser.name, target }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error ?? "Failed to submit");
+        return;
+      }
+      setShowForm(false);
+      setTitle("");
+      setDescription("");
+      if (data.proposal) window.location.href = `/proposals/${data.proposal.id}`;
+    } catch {
+      alert("Failed to submit — is the backend running?");
+    } finally {
+      setSubmitting(false);
     }
-    setShowForm(false);
-    setTitle("");
-    setDescription("");
-    if (data.proposal) window.location.href = `/proposals/${data.proposal.id}`;
   };
 
   return (
@@ -93,7 +101,15 @@ function ProposalsContent() {
           </Button>
         </div>
 
-        {targets.length === 0 && (
+        {loadError && (
+          <Card className="border-red-500/30">
+            <CardContent className="p-4 text-sm text-red-400">
+              Failed to load suggestions — check that the backend is running, then refresh.
+            </CardContent>
+          </Card>
+        )}
+
+        {!loadError && targets.length === 0 && (
           <Card className="border-amber-500/30">
             <CardContent className="p-4 text-sm text-muted-foreground">
               No projects yet. The manager must create a project in Main Ideas first.
@@ -148,7 +164,7 @@ function ProposalsContent() {
 
         <div className="space-y-3">
           {proposals.map((p) => (
-            <Link key={p.id} href={`/proposals/${p.id}`}>
+            <Link key={p.id} href={`/proposals/${p.id}`} className="block">
               <Card className="hover:bg-accent/30 transition-colors cursor-pointer">
                 <CardContent className="flex items-center justify-between p-4">
                   <div>

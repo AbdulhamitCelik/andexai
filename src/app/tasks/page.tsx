@@ -11,6 +11,7 @@ export default function TasksPage() {
   const [branches, setBranches] = useState<DecisionBranch[]>([]);
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [projects, setProjects] = useState<ProjectBrain[]>([]);
+  const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -18,12 +19,15 @@ export default function TasksPage() {
       fetch("/api/branches").then((r) => r.json()),
       fetch("/api/proposals").then((r) => r.json()),
       fetch("/api/project").then((r) => r.json()),
-    ]).then(([tasksData, branchesData, proposalsData, projectsData]) => {
-      setTasks(tasksData.tasks);
-      setBranches(branchesData.branches.filter((b: DecisionBranch) => b.status === "implementing"));
-      setProposals(proposalsData.proposals ?? []);
-      setProjects(projectsData.projects ?? []);
-    });
+    ])
+      .then(([tasksData, branchesData, proposalsData, projectsData]) => {
+        setTasks(tasksData.tasks ?? []);
+        setBranches((branchesData.branches ?? []).filter((b: DecisionBranch) => b.status === "implementing"));
+        setProposals(proposalsData.proposals ?? []);
+        setProjects(projectsData.projects ?? []);
+        setLoadError(false);
+      })
+      .catch(() => setLoadError(true));
   }, []);
 
   const proposalTitle = (proposalId?: string) =>
@@ -46,7 +50,13 @@ export default function TasksPage() {
           </p>
         </div>
 
-        {byBranch.length === 0 ? (
+        {loadError ? (
+          <Card className="border-red-500/30">
+            <CardContent className="p-4 text-sm text-red-400">
+              Failed to load tasks — check that the backend is running, then refresh.
+            </CardContent>
+          </Card>
+        ) : byBranch.length === 0 ? (
           <Card>
             <CardContent className="p-6 text-sm text-muted-foreground">
               No active implementation. Manager must accept a suggestion, create a branch, then start implementation.

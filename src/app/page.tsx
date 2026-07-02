@@ -80,18 +80,22 @@ function DashboardContent() {
               : "Manager creates the project brief. Team adds suggestions from there."}
           </p>
         </div>
-        <Link href="/proposals">
-          <Button disabled={stats.projects === 0}>
+        {stats.projects > 0 ? (
+          <Link href="/proposals">
+            <Button>
+              Add Suggestion <ArrowRight className="ml-2 h-4 w-4" />
+            </Button>
+          </Link>
+        ) : (
+          <Button disabled>
             Add Suggestion <ArrowRight className="ml-2 h-4 w-4" />
           </Button>
-        </Link>
+        )}
       </div>
 
-      {primaryProject && (
-        <AskBrain projectId={primaryProject.id} projectName={primaryProject.name} vision={primaryProject.vision} />
-      )}
+      {primaryProject && <AskBrain projectId={primaryProject.id} />}
 
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard icon={FolderOpen} label="Projects" value={stats.projects} />
         <StatCard icon={FileText} label="Open Suggestions" value={stats.openProposals} />
         <StatCard icon={GitBranch} label="Open Branches" value={stats.openBranches} />
@@ -229,10 +233,10 @@ function StatCard({
   return (
     <Card className="hover:glow-primary">
       <CardContent className="flex items-center gap-4 p-6">
-        <div className={`rounded-lg p-3 ${variant === "warning" ? "bg-amber-500/10" : "bg-primary/10"}`}>
+        <div className={`shrink-0 rounded-lg p-3 ${variant === "warning" ? "bg-amber-500/10" : "bg-primary/10"}`}>
           <Icon className={`h-5 w-5 ${variant === "warning" ? "text-amber-400" : "text-primary"}`} />
         </div>
-        <div>
+        <div className="min-w-0">
           <p className="text-2xl font-bold">{value}</p>
           <p className="text-xs text-muted-foreground">{label}</p>
         </div>

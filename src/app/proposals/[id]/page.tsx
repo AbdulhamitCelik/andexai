@@ -21,11 +21,17 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ id: s
   const [pendingVote, setPendingVote] = useState<VoteType | null>(null);
   const [voteComment, setVoteComment] = useState("");
   const [submittingVote, setSubmittingVote] = useState(false);
+  const [acting, setActing] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
 
   const load = () =>
     fetch(`/api/proposals/${id}`)
       .then((r) => r.json())
-      .then((d) => setProposal(d.proposal))
+      .then((d) => {
+        setProposal(d.proposal ?? null);
+        setLoadFailed(false);
+      })
+      .catch(() => setLoadFailed(true))
       .finally(() => setLoading(false));
 
   useEffect(() => {
@@ -35,27 +41,32 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ id: s
 
   const submitVote = async (voteType: VoteType, comment?: string) => {
     setSubmittingVote(true);
-    await fetch("/api/proposals", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        proposalId: id,
-        action: "vote",
-        vote: voteType,
-        userId: currentUser.id,
-        userName: currentUser.name,
-        comment: comment?.trim() || undefined,
-      }),
-    });
-    await fetch("/api/proposals", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ proposalId: id, action: "tally" }),
-    });
-    setSubmittingVote(false);
-    setPendingVote(null);
-    setVoteComment("");
-    load();
+    try {
+      await fetch("/api/proposals", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          proposalId: id,
+          action: "vote",
+          vote: voteType,
+          userId: currentUser.id,
+          userName: currentUser.name,
+          comment: comment?.trim() || undefined,
+        }),
+      });
+      await fetch("/api/proposals", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ proposalId: id, action: "tally" }),
+      });
+      setPendingVote(null);
+      setVoteComment("");
+      load();
+    } catch {
+      alert("Failed to submit vote — is the backend running?");
+    } finally {
+      setSubmittingVote(false);
+    }
   };
 
   const startVote = (voteType: VoteType) => {
@@ -77,15 +88,31 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ id: s
   };
 
   const managerAction = async (action: "accept" | "decline") => {
-    await fetch("/api/proposals", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ proposalId: id, action, userId: currentUser.id }),
-    });
-    load();
+    setActing(true);
+    try {
+      await fetch("/api/proposals", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ proposalId: id, action, userId: currentUser.id }),
+      });
+      await load();
+    } catch {
+      alert("Action failed — is the backend running?");
+    } finally {
+      setActing(false);
+    }
   };
 
   if (loading) return <AppShell><div className="p-8">Loading...</div></AppShell>;
+  if (loadFailed) {
+    return (
+      <AppShell>
+        <div className="p-8 text-sm text-red-400">
+          Failed to load this suggestion — check that the backend is running, then refresh.
+        </div>
+      </AppShell>
+    );
+  }
   if (!proposal) return <AppShell><div className="p-8">Not found</div></AppShell>;
 
   const canVoteNow = isWorker && ["under_review", "consensus_pending", "ready_for_manager", "needs_discussion"].includes(proposal.status);
@@ -121,16 +148,16 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ id: s
                 <div>
                   <p className="text-sm font-medium text-emerald-400 mb-2">Pros</p>
                   <ul className="list-disc pl-5 text-sm space-y-1">
-                    {proposal.review.pros.map((p) => (
-                      <li key={p}>{p}</li>
+                    {proposal.review.pros.map((p, i) => (
+                      <li key={i}>{p}</li>
                     ))}
                   </ul>
                 </div>
                 <div>
                   <p className="text-sm font-medium text-red-400 mb-2">Cons</p>
                   <ul className="list-disc pl-5 text-sm space-y-1">
-                    {proposal.review.cons.map((c) => (
-                      <li key={c}>{c}</li>
+                    {proposal.review.cons.map((c, i) => (
+                      <li key={i}>{c}</li>
                     ))}
                   </ul>
                 </div>
@@ -244,10 +271,10 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ id: s
               </CardDescription>
             </CardHeader>
             <CardContent className="flex gap-2">
-              <Button onClick={() => managerAction("accept")}>
-                <Check className="mr-1 h-4 w-4" /> Accept
+              <Button onClick={() => managerAction("accept")} disabled={acting}>
+                <Check className="mr-1 h-4 w-4" /> {acting ? "Working..." : "Accept"}
               </Button>
-              <Button variant="destructive" onClick={() => managerAction("decline")}>
+              <Button variant="destructive" onClick={() => managerAction("decline")} disabled={acting}>
                 <X className="mr-1 h-4 w-4" /> Decline
               </Button>
             </CardContent>

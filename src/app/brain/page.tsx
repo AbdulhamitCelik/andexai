@@ -21,8 +21,16 @@ export default function BrainPage() {
   const [nonFunctionalText, setNonFunctionalText] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [loadError, setLoadError] = useState(false);
 
-  const load = () => fetch("/api/project").then((r) => r.json()).then((d) => setProjects(d.projects ?? []));
+  const load = () =>
+    fetch("/api/project")
+      .then((r) => r.json())
+      .then((d) => {
+        setProjects(d.projects ?? []);
+        setLoadError(false);
+      })
+      .catch(() => setLoadError(true));
 
   useEffect(() => {
     load();
@@ -32,56 +40,66 @@ export default function BrainPage() {
     const file = e.target.files?.[0];
     if (!file) return;
     setUploading(true);
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("managerId", currentUser.id);
-    const res = await fetch("/api/project/parse", { method: "POST", body: formData });
-    const data = await res.json();
-    setUploading(false);
-    if (!res.ok) {
-      alert(data.error ?? "Failed to parse file");
-      return;
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("managerId", currentUser.id);
+      const res = await fetch("/api/project/parse", { method: "POST", body: formData });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error ?? "Failed to parse file");
+        return;
+      }
+      const p = data.parsed ?? {};
+      if (p.name) setName(p.name);
+      if (p.vision) setVision(p.vision);
+      if (p.goals?.length) setGoalsText(p.goals.join("\n"));
+      if (p.functionalRequirements?.length) setFunctionalText(p.functionalRequirements.join("\n"));
+      if (p.nonFunctionalRequirements?.length) setNonFunctionalText(p.nonFunctionalRequirements.join("\n"));
+      setShowForm(true);
+    } catch {
+      alert("Failed to parse file — is the backend running?");
+    } finally {
+      setUploading(false);
     }
-    const p = data.parsed ?? {};
-    if (p.name) setName(p.name);
-    if (p.vision) setVision(p.vision);
-    if (p.goals?.length) setGoalsText(p.goals.join("\n"));
-    if (p.functionalRequirements?.length) setFunctionalText(p.functionalRequirements.join("\n"));
-    if (p.nonFunctionalRequirements?.length) setNonFunctionalText(p.nonFunctionalRequirements.join("\n"));
-    setShowForm(true);
   };
 
   const createProject = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
-    const goals = goalsText.split("\n").map((g) => g.trim()).filter(Boolean);
-    const functionalRequirements = functionalText.split("\n").map((g) => g.trim()).filter(Boolean);
-    const nonFunctionalRequirements = nonFunctionalText.split("\n").map((g) => g.trim()).filter(Boolean);
-    const res = await fetch("/api/project", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        managerId: currentUser.id,
-        name,
-        vision,
-        goals,
-        functionalRequirements,
-        nonFunctionalRequirements,
-      }),
-    });
-    const data = await res.json();
-    setSubmitting(false);
-    if (!res.ok) {
-      alert(data.error ?? "Failed to create project");
-      return;
+    try {
+      const goals = goalsText.split("\n").map((g) => g.trim()).filter(Boolean);
+      const functionalRequirements = functionalText.split("\n").map((g) => g.trim()).filter(Boolean);
+      const nonFunctionalRequirements = nonFunctionalText.split("\n").map((g) => g.trim()).filter(Boolean);
+      const res = await fetch("/api/project", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          managerId: currentUser.id,
+          name,
+          vision,
+          goals,
+          functionalRequirements,
+          nonFunctionalRequirements,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error ?? "Failed to create project");
+        return;
+      }
+      setShowForm(false);
+      setName("");
+      setVision("");
+      setGoalsText("");
+      setFunctionalText("");
+      setNonFunctionalText("");
+      load();
+    } catch {
+      alert("Failed to create project — is the backend running?");
+    } finally {
+      setSubmitting(false);
     }
-    setShowForm(false);
-    setName("");
-    setVision("");
-    setGoalsText("");
-    setFunctionalText("");
-    setNonFunctionalText("");
-    load();
   };
 
   return (
@@ -160,7 +178,13 @@ export default function BrainPage() {
           </Card>
         )}
 
-        {projects.length === 0 ? (
+        {loadError ? (
+          <Card className="border-red-500/30">
+            <CardContent className="p-4 text-sm text-red-400">
+              Failed to load projects — check that the backend is running, then refresh.
+            </CardContent>
+          </Card>
+        ) : projects.length === 0 ? (
           <Card>
             <CardContent className="p-8 text-center text-sm text-muted-foreground">
               {isManager
