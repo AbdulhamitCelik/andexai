@@ -342,8 +342,9 @@ export interface AgentLog {
 
 export interface DriftAlert {
   id: string;
+  projectId?: string;
   severity: "low" | "medium" | "high";
-  source: "brain" | "implementation" | "documentation" | "conversation";
+  source: "brain" | "implementation" | "documentation" | "conversation" | "backlog";
   description: string;
   recommendation: string;
   detectedAt: string;

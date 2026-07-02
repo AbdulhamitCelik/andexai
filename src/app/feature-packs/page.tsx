@@ -52,6 +52,7 @@ function FeaturePacksContent() {
   const [discovering, setDiscovering] = useState(false);
   const [promotingId, setPromotingId] = useState<string | null>(null);
   const [promoteTarget, setPromoteTarget] = useState<Record<string, string>>({});
+  const [loadError, setLoadError] = useState(false);
 
   const load = (pid?: string) => {
     const id = pid ?? projectId;
@@ -62,11 +63,13 @@ function FeaturePacksContent() {
         setFeedback(d.feedback ?? []);
         setPacks(d.featurePacks ?? []);
         setTargets(d.targets ?? []);
+        setLoadError(false);
         if (!promoteTarget[id] && d.targets?.length) {
           const projectTarget = d.targets.find((t: SuggestionTarget) => t.value.startsWith("project:"));
           setPromoteTarget((prev) => ({ ...prev, [id]: projectTarget?.value ?? d.targets[0].value }));
         }
-      });
+      })
+      .catch(() => setLoadError(true));
   };
 
   useEffect(() => {
@@ -75,11 +78,10 @@ function FeaturePacksContent() {
       .then((d) => {
         const list: ProjectBrain[] = d.projects ?? [];
         setProjects(list);
-        if (list.length && !projectId) {
-          setProjectId(list[0].id);
-          load(list[0].id);
-        }
-      });
+        setLoadError(false);
+        if (list.length && !projectId) setProjectId(list[0].id);
+      })
+      .catch(() => setLoadError(true));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -91,19 +93,24 @@ function FeaturePacksContent() {
   const runDiscovery = async () => {
     if (!projectId) return;
     setDiscovering(true);
-    const res = await fetch("/api/discovery", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ projectId }),
-    });
-    const data = await res.json();
-    setDiscovering(false);
-    if (!res.ok) {
-      alert(data.error ?? "Discovery failed");
-      return;
+    try {
+      const res = await fetch("/api/discovery", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error ?? "Discovery failed");
+        return;
+      }
+      setPacks(data.featurePacks ?? []);
+      load(projectId);
+    } catch {
+      alert("Discovery failed — is the backend running?");
+    } finally {
+      setDiscovering(false);
     }
-    setPacks(data.featurePacks ?? []);
-    load(projectId);
   };
 
   const promote = async (packId: string) => {
@@ -113,25 +120,30 @@ function FeaturePacksContent() {
       return;
     }
     setPromotingId(packId);
-    const res = await fetch("/api/discovery", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        featurePackId: packId,
-        action: "promote",
-        authorId: currentUser.id,
-        authorName: currentUser.name,
-        target,
-      }),
-    });
-    const data = await res.json();
-    setPromotingId(null);
-    if (!res.ok) {
-      alert(data.error ?? "Promote failed");
-      return;
+    try {
+      const res = await fetch("/api/discovery", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          featurePackId: packId,
+          action: "promote",
+          authorId: currentUser.id,
+          authorName: currentUser.name,
+          target,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error ?? "Promote failed");
+        return;
+      }
+      load(projectId);
+      if (data.proposal?.id) router.push(`/proposals/${data.proposal.id}`);
+    } catch {
+      alert("Promote failed — is the backend running?");
+    } finally {
+      setPromotingId(null);
     }
-    load(projectId);
-    if (data.proposal?.id) router.push(`/proposals/${data.proposal.id}`);
   };
 
   const project = projects.find((p) => p.id === projectId);
@@ -161,7 +173,13 @@ function FeaturePacksContent() {
           </div>
         </div>
 
-        {projects.length === 0 ? (
+        {loadError ? (
+          <Card className="border-red-500/30">
+            <CardContent className="p-4 text-sm text-red-400">
+              Failed to load discovery data — check that the backend is running, then refresh.
+            </CardContent>
+          </Card>
+        ) : projects.length === 0 ? (
           <Card>
             <CardContent className="p-8 text-center text-sm text-muted-foreground">
               Create a project first (manager) on Main Ideas, then return here to run discovery.
@@ -353,14 +371,22 @@ function FeaturePackCard({
           </div>
         )}
 
-        <div className="rounded-md bg-muted/30 p-3 text-xs space-y-2">
-          <p><span className="font-medium text-emerald-400">Pros:</span> {pack.pros[0]}</p>
-          <p><span className="font-medium text-red-400">Cons:</span> {pack.cons[0]}</p>
-        </div>
+        {(pack.pros.length > 0 || pack.cons.length > 0) && (
+          <div className="rounded-md bg-muted/30 p-3 text-xs space-y-2">
+            {pack.pros.length > 0 && (
+              <p><span className="font-medium text-emerald-400">Pros:</span> {pack.pros[0]}</p>
+            )}
+            {pack.cons.length > 0 && (
+              <p><span className="font-medium text-red-400">Cons:</span> {pack.cons[0]}</p>
+            )}
+          </div>
+        )}
 
-        <p className="text-xs text-muted-foreground italic border-l-2 border-primary/30 pl-2">
-          &quot;{pack.topEvidenceQuotes[0]}&quot;
-        </p>
+        {pack.topEvidenceQuotes.length > 0 && (
+          <p className="text-xs text-muted-foreground italic border-l-2 border-primary/30 pl-2">
+            &quot;{pack.topEvidenceQuotes[0]}&quot;
+          </p>
+        )}
 
         {promoted ? (
           <div className="space-y-2">

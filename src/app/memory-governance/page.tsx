@@ -32,6 +32,7 @@ export default function MemoryGovernancePage() {
   >([]);
   const [stats, setStats] = useState({ total: 0, accessible: 0, restricted: 0 });
   const [syncing, setSyncing] = useState(false);
+  const [loadError, setLoadError] = useState(false);
 
   const load = (uid = currentUser.id, pid = projectId) => {
     const q = new URLSearchParams({ userId: uid });
@@ -47,7 +48,9 @@ export default function MemoryGovernancePage() {
         setAuditLogs(d.auditLogs ?? []);
         setLineage(d.lineage ?? []);
         setStats(d.stats ?? { total: 0, accessible: 0, restricted: 0 });
-      });
+        setLoadError(false);
+      })
+      .catch(() => setLoadError(true));
   };
 
   useEffect(() => {
@@ -57,9 +60,18 @@ export default function MemoryGovernancePage() {
 
   const sync = async () => {
     setSyncing(true);
-    await fetch("/api/governance", { method: "POST" });
-    setSyncing(false);
-    load();
+    try {
+      const res = await fetch("/api/governance", { method: "POST" });
+      if (!res.ok) {
+        alert("Sync failed");
+        return;
+      }
+      load();
+    } catch {
+      alert("Sync failed — is the backend running?");
+    } finally {
+      setSyncing(false);
+    }
   };
 
   const demoUsers = [
@@ -110,6 +122,14 @@ export default function MemoryGovernancePage() {
             ))}
           </CardContent>
         </Card>
+
+        {loadError && (
+          <Card className="border-red-500/30">
+            <CardContent className="p-4 text-sm text-red-400">
+              Failed to load governance data — check that the backend is running, then refresh.
+            </CardContent>
+          </Card>
+        )}
 
         <div className="grid gap-4 md:grid-cols-4">
           <Stat label="Current user" value={currentUser.name} sub={currentUser.memoryRole} />

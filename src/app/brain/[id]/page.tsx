@@ -14,6 +14,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   const { id } = use(params);
   const { isManager, currentUser } = useUser();
   const [project, setProject] = useState<ProjectBrain | null>(null);
+  const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState("");
   const [vision, setVision] = useState("");
@@ -26,7 +27,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
     fetch(`/api/project/${id}`)
       .then((r) => r.json())
       .then((d) => {
-        setProject(d.project);
+        setProject(d.project ?? null);
         if (d.project) {
           setName(d.project.name);
           setVision(d.project.vision);
@@ -34,7 +35,9 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
           setFunctionalText((d.project.functionalRequirements ?? []).join("\n"));
           setNonFunctionalText((d.project.nonFunctionalRequirements ?? []).join("\n"));
         }
-      });
+      })
+      .catch(() => setProject(null))
+      .finally(() => setLoading(false));
 
   useEffect(() => {
     load();
@@ -44,29 +47,53 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
-    const goals = goalsText.split("\n").map((g) => g.trim()).filter(Boolean);
-    const functionalRequirements = functionalText.split("\n").map((g) => g.trim()).filter(Boolean);
-    const nonFunctionalRequirements = nonFunctionalText.split("\n").map((g) => g.trim()).filter(Boolean);
-    await fetch("/api/project", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        managerId: currentUser.id,
-        projectId: id,
-        name,
-        vision,
-        goals,
-        functionalRequirements,
-        nonFunctionalRequirements,
-      }),
-    });
-    setSaving(false);
-    setEditing(false);
-    load();
+    try {
+      const goals = goalsText.split("\n").map((g) => g.trim()).filter(Boolean);
+      const functionalRequirements = functionalText.split("\n").map((g) => g.trim()).filter(Boolean);
+      const nonFunctionalRequirements = nonFunctionalText.split("\n").map((g) => g.trim()).filter(Boolean);
+      const res = await fetch("/api/project", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          managerId: currentUser.id,
+          projectId: id,
+          name,
+          vision,
+          goals,
+          functionalRequirements,
+          nonFunctionalRequirements,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error ?? "Failed to save changes");
+        return;
+      }
+      setEditing(false);
+      load();
+    } catch {
+      alert("Failed to save changes — is the backend running?");
+    } finally {
+      setSaving(false);
+    }
   };
 
-  if (!project) {
+  if (loading) {
     return <AppShell><div className="p-8">Loading...</div></AppShell>;
+  }
+
+  if (!project) {
+    return (
+      <AppShell>
+        <div className="p-8 space-y-4">
+          <p className="font-medium">Project not found</p>
+          <p className="text-sm text-muted-foreground">It may have been removed, or the link is out of date.</p>
+          <Link href="/brain" className="flex items-center gap-1 text-sm text-primary hover:underline">
+            <ArrowLeft className="h-4 w-4" /> All projects
+          </Link>
+        </div>
+      </AppShell>
+    );
   }
 
   return (
@@ -76,7 +103,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
           <ArrowLeft className="h-4 w-4" /> All projects
         </Link>
 
-        <div className="flex items-start justify-between gap-4">
+        <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold">{project.name}</h1>
             <Badge className="mt-2">v{project.currentVersion}</Badge>
@@ -122,7 +149,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
             <Card>
               <CardHeader><CardTitle>Goals</CardTitle></CardHeader>
               <CardContent>
-                <ul className="list-disc pl-5 text-sm space-y-1">{project.goals.map((g) => <li key={g}>{g}</li>)}</ul>
+                <ul className="list-disc pl-5 text-sm space-y-1">{project.goals.map((g, i) => <li key={i}>{g}</li>)}</ul>
               </CardContent>
             </Card>
 
@@ -134,7 +161,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                     <p className="text-sm text-muted-foreground">None defined</p>
                   ) : (
                     <ul className="list-disc pl-5 text-sm space-y-1">
-                      {(project.functionalRequirements ?? []).map((r) => <li key={r}>{r}</li>)}
+                      {(project.functionalRequirements ?? []).map((r, i) => <li key={i}>{r}</li>)}
                     </ul>
                   )}
                 </CardContent>
@@ -146,7 +173,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                     <p className="text-sm text-muted-foreground">None defined</p>
                   ) : (
                     <ul className="list-disc pl-5 text-sm space-y-1">
-                      {(project.nonFunctionalRequirements ?? []).map((r) => <li key={r}>{r}</li>)}
+                      {(project.nonFunctionalRequirements ?? []).map((r, i) => <li key={i}>{r}</li>)}
                     </ul>
                   )}
                 </CardContent>

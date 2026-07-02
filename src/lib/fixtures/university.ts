@@ -3,8 +3,8 @@
 // This is a deliberately messy, realistic dataset used to exercise the full
 // decision-governance pipeline, including exceptions and edge cases:
 //
-//   - an approved+merged decision (happy path)
-//   - a rejected decision (rejections outweigh approvals)
+//   - an accepted decision that opens a branch (happy path)
+//   - a rejected decision (rejections outweigh approvals; manager declines)
 //   - a decision stuck in "needs discussion"
 //   - a tied vote that must NOT auto-approve
 //   - a near-duplicate proposal (duplicate detection)
@@ -81,7 +81,7 @@ export interface SeedProposal {
   description: string;
   author: { id: string; name: string };
   votes: SeedVote[];
-  /** approve → run approval pipeline; check → tally only; leave → stay under review */
+  /** approve → manager accepts (opens a decision branch); check → tally, manager declines if expectStatus is rejected; leave → stay under review */
   finalize: "approve" | "check" | "leave";
   /** expected status after seeding — asserted by the test harness */
   expectStatus: string;
@@ -104,8 +104,8 @@ export const UNIVERSITY_PROPOSALS: SeedProposal[] = [
       { user: P.dpo, vote: "approve_with_comments", comment: "Document token retention." },
     ],
     finalize: "approve",
-    expectStatus: "merged",
-    note: "Happy path — clear consensus, merges and generates tasks.",
+    expectStatus: "accepted",
+    note: "Happy path — clear consensus; manager accepts and a decision branch opens.",
   },
   {
     title: "Replace PostgreSQL Student Records with MongoDB",

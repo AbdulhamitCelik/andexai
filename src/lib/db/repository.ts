@@ -143,6 +143,19 @@ export async function dbGetDriftAlerts(): Promise<DriftAlert[]> {
   return (await DriftAlertModel.find().lean()) as DriftAlert[];
 }
 
+/** Remove a project's proposals, branches, tasks, and drift alerts (used to re-seed demos deterministically). */
+export async function dbClearProjectData(projectId: string): Promise<void> {
+  await ensureDb();
+  const branches = (await BranchModel.find({ projectId }).lean()) as DecisionBranch[];
+  const branchIds = branches.map((b) => b.id);
+  await Promise.all([
+    ProposalModel.deleteMany({ projectId }),
+    BranchModel.deleteMany({ projectId }),
+    branchIds.length ? TaskModel.deleteMany({ branchId: { $in: branchIds } }) : Promise.resolve(),
+    DriftAlertModel.deleteMany({ projectId }),
+  ]);
+}
+
 export async function dbInitCollections(): Promise<{ collections: string[]; message: string }> {
   await ensureDb();
   await Promise.all([

@@ -13,7 +13,7 @@
     "test:llm": "node --use-system-ca --env-file=.env.local scripts/test-llm.mjs",
     "test:mongo": "node --use-system-ca --env-file=.env.local scripts/test-mongo.mjs",
     "test:mongo:diag": "node --use-system-ca --env-file=.env.local scripts/test-mongo-diagnose.mjs",
-    "test:scenarios": "tsx scripts/test-scenarios.ts"
+    "test:scenarios": "node --use-system-ca --env-file=.env.local --import tsx scripts/test-scenarios.ts"
   },
   "dependencies": {
     "@prisma/client": "6.5.0",

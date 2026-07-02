@@ -21,6 +21,7 @@ function RequirementsContent() {
   const searchParams = useSearchParams();
   const [projects, setProjects] = useState<ProjectBrain[]>([]);
   const [selectedId, setSelectedId] = useState<string>("");
+  const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
     fetch("/api/project")
@@ -28,13 +29,15 @@ function RequirementsContent() {
       .then((d) => {
         const list: ProjectBrain[] = d.projects ?? [];
         setProjects(list);
+        setLoadError(false);
         const fromQuery = searchParams.get("project");
         if (fromQuery && list.some((p) => p.id === fromQuery)) {
           setSelectedId(fromQuery);
         } else if (list.length) {
           setSelectedId((prev) => prev || list[0].id);
         }
-      });
+      })
+      .catch(() => setLoadError(true));
   }, [searchParams]);
 
   const project = projects.find((p) => p.id === selectedId);
@@ -54,7 +57,13 @@ function RequirementsContent() {
           </p>
         </div>
 
-        {projects.length === 0 ? (
+        {loadError ? (
+          <Card className="border-red-500/30">
+            <CardContent className="p-4 text-sm text-red-400">
+              Failed to load requirements — check that the backend is running, then refresh.
+            </CardContent>
+          </Card>
+        ) : projects.length === 0 ? (
           <Card>
             <CardContent className="p-8 text-center text-sm text-muted-foreground">
               No projects yet. Create a project with requirements on the Main Ideas page.
@@ -95,8 +104,8 @@ function RequirementsContent() {
                     <p className="text-sm text-muted-foreground">No functional requirements defined yet.</p>
                   ) : (
                     <ul className="list-decimal pl-5 text-sm space-y-2">
-                      {functional.map((req) => (
-                        <li key={req}>{req}</li>
+                      {functional.map((req, i) => (
+                        <li key={i}>{req}</li>
                       ))}
                     </ul>
                   )}
@@ -113,8 +122,8 @@ function RequirementsContent() {
                     <p className="text-sm text-muted-foreground">No non-functional requirements defined yet.</p>
                   ) : (
                     <ul className="list-decimal pl-5 text-sm space-y-2">
-                      {nonFunctional.map((req) => (
-                        <li key={req}>{req}</li>
+                      {nonFunctional.map((req, i) => (
+                        <li key={i}>{req}</li>
                       ))}
                     </ul>
                   )}

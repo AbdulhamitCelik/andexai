@@ -14,26 +14,42 @@ export default function BranchesPage() {
   const { currentUser, isManager } = useUser();
   const [branches, setBranches] = useState<DecisionBranch[]>([]);
   const [projects, setProjects] = useState<ProjectBrain[]>([]);
+  const [loadError, setLoadError] = useState(false);
+  const [actingId, setActingId] = useState<string | null>(null);
 
   const load = () =>
     fetch("/api/branches")
       .then((r) => r.json())
       .then((d) => {
-        setBranches(d.branches);
+        setBranches(d.branches ?? []);
         setProjects(d.projects ?? []);
-      });
+        setLoadError(false);
+      })
+      .catch(() => setLoadError(true));
 
   useEffect(() => {
     load();
   }, []);
 
   const act = async (branchId: string, action: string) => {
-    await fetch("/api/branches", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ branchId, action, managerId: currentUser.id }),
-    });
-    load();
+    setActingId(branchId);
+    try {
+      const res = await fetch("/api/branches", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ branchId, action, managerId: currentUser.id }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error ?? "Action failed");
+        return;
+      }
+      await load();
+    } catch {
+      alert("Action failed — is the backend running?");
+    } finally {
+      setActingId(null);
+    }
   };
 
   const active = branches.filter((b) => ["open", "implementing"].includes(b.status));
@@ -74,16 +90,16 @@ export default function BranchesPage() {
                   <Button size="sm" variant="outline"><Plus className="mr-1 h-3 w-3" /> Add suggestion</Button>
                 </Link>
                 {isManager && b.status === "open" && (
-                  <Button size="sm" onClick={() => act(b.id, "start_implementation")}>
+                  <Button size="sm" onClick={() => act(b.id, "start_implementation")} disabled={actingId === b.id}>
                     <Play className="mr-1 h-3 w-3" /> Start Implementation
                   </Button>
                 )}
                 {isManager && (
                   <>
-                    <Button size="sm" variant="outline" onClick={() => act(b.id, "merge_to_main")}>
+                    <Button size="sm" variant="outline" onClick={() => act(b.id, "merge_to_main")} disabled={actingId === b.id}>
                       <Merge className="mr-1 h-3 w-3" /> Merge to Project
                     </Button>
-                    <Button size="sm" variant="destructive" onClick={() => act(b.id, "discard")}>
+                    <Button size="sm" variant="destructive" onClick={() => act(b.id, "discard")} disabled={actingId === b.id}>
                       <Trash2 className="mr-1 h-3 w-3" /> Discard
                     </Button>
                   </>
@@ -93,7 +109,15 @@ export default function BranchesPage() {
           </Card>
         ))}
 
-        {active.length === 0 && (
+        {loadError && (
+          <Card className="border-red-500/30">
+            <CardContent className="p-4 text-sm text-red-400">
+              Failed to load branches — check that the backend is running, then refresh.
+            </CardContent>
+          </Card>
+        )}
+
+        {!loadError && active.length === 0 && (
           <Card>
             <CardContent className="p-6 text-sm text-muted-foreground flex items-center gap-2">
               <GitBranch className="h-4 w-4" />

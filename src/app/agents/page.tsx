@@ -8,9 +8,13 @@ import { AGENT_CARD_STYLES, AGENT_COLORS, AGENT_SKILLS } from "@/lib/agents/skil
 
 export default function AgentsPage() {
   const [logs, setLogs] = useState<AgentLog[]>([]);
+  const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
-    fetch("/api/agents").then((r) => r.json()).then((d) => setLogs(d.logs ?? []));
+    fetch("/api/agents")
+      .then((r) => r.json())
+      .then((d) => setLogs(d.logs ?? []))
+      .catch(() => setLoadError(true));
   }, []);
 
   return (
@@ -50,6 +54,14 @@ export default function AgentsPage() {
             </Card>
           ))}
         </section>
+
+        {loadError && (
+          <Card className="border-red-500/30">
+            <CardContent className="p-4 text-sm text-red-400">
+              Failed to load agent activity — check that the backend is running, then refresh.
+            </CardContent>
+          </Card>
+        )}
 
         <div className="space-y-2">
           {logs.map((log) => (

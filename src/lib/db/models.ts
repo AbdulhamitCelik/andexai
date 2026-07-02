@@ -109,6 +109,7 @@ const AgentLogSchema = new Schema<AgentLog>(
 const DriftAlertSchema = new Schema<DriftAlert>(
   {
     id: { type: String, required: true, unique: true, index: true },
+    projectId: { type: String, index: true },
     severity: String,
     source: String,
     description: String,
