@@ -12,29 +12,31 @@ interface AndexBrandProps {
   priority?: boolean;
   size?: BrandSize;
   layout?: "horizontal" | "stacked";
-  /** Append "AI" after ANDEX. */
+  /** Append "AI" after the logo wordmark. */
   showAi?: boolean;
   tagline?: string;
 }
 
+/** Full logo image height (icon + ANDEX from asset). */
+const logoHeights: Record<BrandSize, string> = {
+  sm: "h-7",
+  md: "h-9",
+  lg: "h-14 md:h-16",
+};
+
+const aiText: Record<BrandSize, string> = {
+  sm: "text-xs",
+  md: "text-sm",
+  lg: "text-lg md:text-xl",
+};
+
 const markSizes: Record<BrandSize, string> = {
-  sm: "h-9 w-9",
-  md: "h-11 w-11",
-  lg: "h-[4.5rem] w-[4.5rem] md:h-20 md:w-20",
+  sm: "h-7 w-7",
+  md: "h-8 w-8",
+  lg: "h-12 w-12",
 };
 
-const wordmarkSizes: Record<BrandSize, string> = {
-  sm: "text-base tracking-[0.14em]",
-  md: "text-xl tracking-[0.16em]",
-  lg: "text-3xl md:text-4xl tracking-[0.2em]",
-};
-
-const aiSizes: Record<BrandSize, string> = {
-  sm: "text-sm tracking-[0.06em]",
-  md: "text-base tracking-[0.08em]",
-  lg: "text-xl md:text-2xl tracking-[0.1em]",
-};
-
+/** Cropped icon mark for collapsed sidebar. */
 export function AndexMark({
   size = "md",
   className,
@@ -45,48 +47,43 @@ export function AndexMark({
   priority?: boolean;
 }) {
   return (
-    <div
-      className={cn(
-        "relative shrink-0 overflow-hidden rounded-lg bg-white shadow-sm ring-1 ring-black/5 dark:ring-white/10",
-        markSizes[size],
-        className
-      )}
-    >
+    <div className={cn("relative shrink-0 overflow-hidden rounded-md", markSizes[size], className)}>
       <Image
         src="/andex-logo.png"
-        alt=""
-        width={112}
-        height={224}
-        className="absolute left-1/2 top-0 h-[220%] w-auto max-w-none -translate-x-1/2 object-cover object-top"
+        alt="Andex"
+        width={96}
+        height={192}
+        className="absolute left-1/2 top-0 h-[185%] w-auto max-w-none -translate-x-1/2 object-cover object-top"
         priority={priority}
       />
     </div>
   );
 }
 
-export function AndexWordmark({
+/** Full logo asset (icon + ANDEX) with optional AI suffix. */
+export function AndexLogoImage({
   size = "md",
   showAi = false,
   className,
-  inverted = false,
+  priority = false,
 }: {
   size?: BrandSize;
   showAi?: boolean;
   className?: string;
-  /** Light text for splash / dark backgrounds. */
-  inverted?: boolean;
+  priority?: boolean;
 }) {
-  const base = inverted ? "text-white" : "text-foreground";
-  const ai = inverted ? "text-white/70" : "text-muted-foreground";
-
   return (
-    <span className={cn("inline-flex items-baseline font-bold leading-none", className)}>
-      <span className={cn(wordmarkSizes[size], base)}>
-        <span>ANDE</span>
-        <span className="text-[#2970FF]">X</span>
-      </span>
+    <span className={cn("inline-flex items-end gap-1", className)}>
+      <Image
+        src="/andex-logo.png"
+        alt="Andex"
+        width={240}
+        height={120}
+        className={cn("w-auto shrink-0 object-contain", logoHeights[size])}
+        priority={priority}
+      />
       {showAi && (
-        <span className={cn("ml-1.5 font-semibold", aiSizes[size], ai)}>AI</span>
+        <span className={cn("pb-px font-bold leading-none text-[#2970FF]", aiText[size])}>AI</span>
       )}
     </span>
   );
@@ -102,41 +99,36 @@ export function AndexBrand({
   showAi = true,
   tagline,
 }: AndexBrandProps) {
-  const mark = <AndexMark size={size} priority={priority} />;
-
   if (iconOnly) {
-    const content = href ? (
-      <Link href={href} className="inline-flex shrink-0" title="Andex AI">
-        {mark}
-      </Link>
-    ) : (
-      mark
-    );
-    return content;
+    const mark = <AndexMark size={size} priority={priority} />;
+    if (href) {
+      return (
+        <Link href={href} className="inline-flex shrink-0" title="Andex AI">
+          {mark}
+        </Link>
+      );
+    }
+    return mark;
   }
 
-  const wordmark = <AndexWordmark size={size} showAi={showAi} />;
+  const logo = <AndexLogoImage size={size} showAi={showAi} priority={priority} />;
 
   const inner =
     layout === "stacked" ? (
-      <div className={cn("flex flex-col items-center gap-3 text-center", className)}>
-        {mark}
-        {wordmark}
+      <div className={cn("flex flex-col items-center gap-2 text-center", className)}>
+        {logo}
         {tagline && (
           <p className="max-w-xs text-sm leading-relaxed text-muted-foreground">{tagline}</p>
         )}
       </div>
     ) : (
-      <div className={cn("flex items-center gap-3", className)}>
-        {mark}
-        <div className="min-w-0">
-          {wordmark}
-          {tagline && (
-            <p className="mt-1.5 text-[11px] leading-snug text-muted-foreground tracking-wide">
-              {tagline}
-            </p>
-          )}
-        </div>
+      <div className={cn("inline-flex flex-col", className)}>
+        {logo}
+        {tagline && (
+          <p className="mt-1.5 text-[11px] leading-snug text-muted-foreground tracking-wide">
+            {tagline}
+          </p>
+        )}
       </div>
     );
 

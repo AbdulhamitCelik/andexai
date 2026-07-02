@@ -87,7 +87,7 @@ export function Sidebar({ collapsed = false }: { collapsed?: boolean }) {
           <AndexLogo
             href="/"
             iconOnly={collapsed}
-            size={collapsed ? "sm" : "md"}
+            size="sm"
             showAi
             tagline={collapsed ? undefined : "AI councils for product development"}
             priority

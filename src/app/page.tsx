@@ -121,12 +121,12 @@ function DashboardContent() {
         </Card>
       )}
       <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="space-y-3">
+        <div className="space-y-2">
           <p className="text-xs font-semibold uppercase tracking-wider text-primary/80">
             Dashboard
           </p>
-          <AndexLogo layout="horizontal" size="md" showAi />
-          <p className="max-w-2xl text-muted-foreground">
+          <AndexLogo size="md" showAi />
+          <p className="max-w-2xl text-sm text-muted-foreground">
             {stats.projects > 0
               ? `${stats.projects} project(s) — team adds suggestions, workers vote, manager decides.`
               : "Manager creates the project brief. Team adds suggestions from there."}
