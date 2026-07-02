@@ -49,6 +49,7 @@ export interface PriorityInput {
 }
 
 function clamp(n: number) {
+  if (!Number.isFinite(n)) return 50;
   return Math.max(0, Math.min(100, Math.round(n)));
 }
 

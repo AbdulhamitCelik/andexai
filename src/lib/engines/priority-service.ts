@@ -46,7 +46,7 @@ export async function refreshProjectPriorities(projectId: string): Promise<Prior
 
   for (const p of proposals) {
     const approve = p.votes?.filter((v) => v.vote.startsWith("approve")).length ?? 0;
-    const total = p.votes?.length ?? 1;
+    const total = Math.max(p.votes?.length ?? 0, 1);
     scores.push(
       priorityFromProposal({
         id: p.id,
@@ -93,7 +93,7 @@ export async function refreshProjectPriorities(projectId: string): Promise<Prior
       projectId,
       title: "Project overall",
       signals: {
-        businessValue: scores.length ? Math.max(...scores.map((s) => s.overallScore)) : 50,
+        businessValue: scores.length ? Math.max(...scores.map((s) => s.overallScore).filter(Number.isFinite)) : 50,
         strategicAlignment: 75,
         confidence: scores.length ? Math.round(scores.reduce((a, s) => a + s.confidenceScore, 0) / scores.length) : 50,
       },

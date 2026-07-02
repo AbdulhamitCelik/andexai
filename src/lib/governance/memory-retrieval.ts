@@ -37,22 +37,47 @@ export async function syncGovernedMemoryRegistry(): Promise<GovernedMemoryRecord
 function scoreMemory(query: string, record: GovernedMemoryRecord): number {
   const q = query.toLowerCase();
   const text = `${record.title} ${record.content}`.toLowerCase();
-  const words = q.split(/\s+/).filter((w) => w.length > 3);
+  const words = q.split(/\s+/).filter((w) => w.length > 2);
   let score = 0;
   for (const w of words) {
     if (text.includes(w)) score += 2;
   }
-  if (record.title.toLowerCase().includes(q.slice(0, 20))) score += 5;
+  if (record.resourceType === "project_brain") score += 8;
+  if (record.title.toLowerCase().includes(q.slice(0, 24))) score += 5;
   return score;
+}
+
+function rankMemoriesForQuery(records: GovernedMemoryRecord[], prompt: string): GovernedMemoryRecord[] {
+  const scored = records
+    .map((r) => ({ record: r, score: scoreMemory(prompt, r) }))
+    .sort((a, b) => b.score - a.score);
+
+  const brain = scored.find((x) => x.record.resourceType === "project_brain")?.record;
+  const top = scored
+    .filter((x) => x.score > 0)
+    .slice(0, 8)
+    .map((x) => x.record);
+
+  if (brain && !top.some((r) => r.id === brain.id)) {
+    top.unshift(brain);
+  }
+
+  if (top.length === 0) {
+    return scored.slice(0, 6).map((x) => x.record);
+  }
+
+  return top.slice(0, 8);
 }
 
 export interface MemoryAskResult {
   answer: string;
   provider?: string;
+  model?: string;
   memoriesUsed: number;
   memoriesFiltered: number;
   accessDenied: boolean;
   message?: string;
+  llmFallback?: boolean;
 }
 
 /**
@@ -70,35 +95,22 @@ export async function askWithGovernedMemory(
     return { answer: "", accessDenied: true, memoriesUsed: 0, memoriesFiltered: 0, message: "Unknown user" };
   }
 
-  let records = await dbGetGovernedMemories(projectId);
-  if (records.length === 0) {
-    records = await syncGovernedMemoryRegistry();
-    records = records.filter((r) => r.permissions.projectId === projectId);
-  }
+  let records = await syncGovernedMemoryRegistry();
+  records = records.filter((r) => r.permissions.projectId === projectId);
 
   const registry = new Map(records.map((r) => [r.id, r]));
   const auditBatch: PermissionAuditLog[] = [];
 
-  // Score and rank candidates BEFORE permission filter (permission layer removes restricted)
-  const candidates = records
-    .map((r) => ({ record: r, score: scoreMemory(prompt, r) }))
-    .filter((x) => x.score > 0 || records.length <= 8)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 12)
-    .map((x) => x.record);
-
+  const candidates = rankMemoriesForQuery(records, prompt);
   const { accessible, decisions } = filterAccessibleMemory(user, candidates, "query");
 
-  for (let i = 0; i < candidates.length; i++) {
-    const record = candidates[i];
-    const decision = decisions.find((d) => d.resourceId === record.resourceId);
+  for (const record of candidates) {
     const result = canAccess(user, record, "query", registry);
     auditBatch.push({
       id: uuid(),
       ...buildAuditLog(user, record, "query", result),
       timestamp: new Date().toISOString(),
     });
-    void decision;
   }
 
   await dbSavePermissionAuditLogs(auditBatch);
@@ -108,7 +120,10 @@ export async function askWithGovernedMemory(
   const projectBrain = accessible.find((r) => r.resourceType === "project_brain");
   const vision = projectBrain?.content ?? "";
 
-  if (accessible.length === 0 && candidates.some((c) => !decisions.find((d) => d.resourceId === c.resourceId && d.granted))) {
+  if (
+    accessible.length === 0 &&
+    candidates.some((c) => !decisions.find((d) => d.resourceId === c.resourceId && d.granted))
+  ) {
     return {
       answer: "",
       accessDenied: true,
@@ -120,35 +135,48 @@ export async function askWithGovernedMemory(
   }
 
   const memoryContext = accessible
-    .slice(0, 6)
-    .map((m) => `[${m.resourceType}] ${m.title}: ${m.content.slice(0, 400)}`)
+    .slice(0, 8)
+    .map((m) => `[${m.resourceType}] ${m.title}: ${m.content.slice(0, 500)}`)
     .join("\n\n");
 
   const system = [
-    `You are the permission-governed Project Brain assistant.`,
-    `User role: ${user.memoryRole}. Only the following AUTHORISED memories were retrieved after deterministic permission filtering.`,
-    `Do NOT mention or hint at restricted/confidential resources the user cannot access.`,
-    `Project vision: ${vision}`,
+    "You are the Project Brain assistant for an engineering decision platform.",
+    `The user's role is ${user.memoryRole}. Answer ONLY using the authorised organisational memory below.`,
+    "Directly address the user's specific question — do not give a generic project summary unless they asked for one.",
+    "If the memory does not contain enough detail, say what is known and what is missing.",
+    "Do NOT mention or hint at restricted resources the user cannot access.",
+    vision ? `Project vision (authoritative): ${vision}` : "",
     memoryContext ? `\nAuthorised organisational memory:\n${memoryContext}` : "",
-  ].join("\n");
+  ]
+    .filter(Boolean)
+    .join("\n");
 
   try {
-    const result = await chat(prompt, { system, maxTokens: 400 });
+    const result = await chat(prompt, { system, maxTokens: 600, temperature: 0.75 });
     return {
       answer: result.text,
       provider: result.provider,
+      model: result.model,
       memoriesUsed: accessible.length,
       memoriesFiltered,
       accessDenied: false,
     };
-  } catch {
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : "LLM unavailable";
+    const excerpt = accessible
+      .slice(0, 3)
+      .map((m) => `• ${m.title}: ${m.content.slice(0, 120)}…`)
+      .join("\n");
+
     return {
-      answer: vision
-        ? `Based on authorised project vision only: ${vision.slice(0, 300)}… (LLM unavailable — permission filter still applied; ${accessible.length} memories authorised, ${memoriesFiltered} filtered.)`
-        : "LLM unavailable. Permission filtering completed successfully.",
+      answer: excerpt
+        ? `I could not reach an LLM provider (${detail}). Based on authorised memory only:\n\n${excerpt}\n\nConfigure an API key in .env.local and run npm run test:llm.`
+        : `LLM unavailable (${detail}). No authorised memory matched your question.`,
       memoriesUsed: accessible.length,
       memoriesFiltered,
       accessDenied: false,
+      llmFallback: true,
+      message: detail,
     };
   }
 }

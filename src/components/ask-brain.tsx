@@ -14,9 +14,11 @@ export function AskBrain({ projectId }: { projectId: string }) {
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState("");
   const [provider, setProvider] = useState("");
+  const [model, setModel] = useState("");
   const [meta, setMeta] = useState<{ used: number; filtered: number } | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [llmFallback, setLlmFallback] = useState(false);
 
   async function ask(e: React.FormEvent) {
     e.preventDefault();
@@ -25,7 +27,9 @@ export function AskBrain({ projectId }: { projectId: string }) {
     setError("");
     setAnswer("");
     setProvider("");
+    setModel("");
     setMeta(null);
+    setLlmFallback(false);
 
     try {
       const res = await fetch("/api/memory/ask", {
@@ -43,7 +47,12 @@ export function AskBrain({ projectId }: { projectId: string }) {
       } else {
         setAnswer(data.answer);
         setProvider(data.provider ?? "");
+        setModel(data.model ?? "");
+        setLlmFallback(Boolean(data.llmFallback));
         setMeta({ used: data.memoriesUsed, filtered: data.memoriesFiltered });
+        if (data.llmFallback && data.message) {
+          setError(`LLM fallback: ${data.message}`);
+        }
       }
     } catch {
       setError("Network error — is the dev server running?");
@@ -89,7 +98,12 @@ export function AskBrain({ projectId }: { projectId: string }) {
             <p className="whitespace-pre-wrap text-sm leading-relaxed">{answer}</p>
             <div className="mt-3 flex flex-wrap gap-2">
               {provider && (
-                <Badge variant="secondary" className="text-[10px]">via {provider}</Badge>
+                <Badge variant="secondary" className="text-[10px]">
+                  via {provider}{model ? ` · ${model}` : ""}
+                </Badge>
+              )}
+              {llmFallback && (
+                <Badge variant="destructive" className="text-[10px]">memory-only fallback</Badge>
               )}
               {meta && (
                 <Badge variant="secondary" className="text-[10px]">

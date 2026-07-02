@@ -21,7 +21,7 @@ const PLANNING_AGENTS = [
 
 function buildPlanningReport(proposal: Proposal, branch: DecisionBranch): PlanningReport {
   const approve = proposal.votes?.filter((v) => v.vote.startsWith("approve")).length ?? 0;
-  const total = proposal.votes?.length ?? 1;
+  const total = Math.max(proposal.votes?.length ?? 0, 1);
   const priority = priorityFromProposal({
     id: proposal.id,
     projectId: proposal.projectId,
