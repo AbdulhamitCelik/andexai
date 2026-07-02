@@ -9,6 +9,7 @@ import {
   getSuggestionTargets,
 } from "@/lib/agents/orchestrator";
 import { isDbConfigured } from "@/lib/db/mongodb";
+import { asPlainText } from "@/lib/utils/text";
 
 export async function GET() {
   if (!isDbConfigured()) {
@@ -41,7 +42,9 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const { title, description, authorId = "wkr-1", authorName = "Alex", target } = body;
+  const title = asPlainText(body.title);
+  const description = asPlainText(body.description);
+  const { authorId = "wkr-1", authorName = "Alex", target } = body;
 
   if (!title || !description || !target) {
     return NextResponse.json({ error: "title, description, and target required" }, { status: 400 });

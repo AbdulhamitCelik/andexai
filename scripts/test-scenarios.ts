@@ -17,6 +17,8 @@ import {
   createProposal,
   castVote,
   tallyVotes,
+  getDriftAlerts,
+  managerAcceptProposal,
 } from "@/lib/agents/orchestrator";
 
 let passed = 0;
@@ -107,6 +109,36 @@ async function main() {
   });
   await expectThrow("F3 · manager cannot vote (workers only)", async () => {
     await castVote(tied?.id ?? "missing", "mgr-1", "Sarah", "approve");
+  });
+
+  // G — regression: array titles, drift dedup, governance bypass
+  const arrayTitle = await createProposal(
+    ["script", "alert"] as unknown as string,
+    "Array title regression",
+    "wkr-1",
+    "Alex",
+    "main",
+    brain.id
+  );
+  check(
+    "G1 · array title coerced without crash",
+    typeof arrayTitle.title === "string" && arrayTitle.title.includes("script"),
+    `title=${JSON.stringify(arrayTitle.title)}`
+  );
+
+  await detectDrift();
+  const driftCount1 = (await getDriftAlerts()).length;
+  await detectDrift();
+  const driftCount2 = (await getDriftAlerts()).length;
+  check(
+    "G2 · repeated drift scan does not duplicate alerts",
+    driftCount1 === driftCount2,
+    `${driftCount1} vs ${driftCount2}`
+  );
+
+  await expectThrow("G3 · manager cannot accept without consensus", async () => {
+    const p = await createProposal("Governance bypass test", "Accept should be blocked", "wkr-1", "Alex", "main", brain.id);
+    await managerAcceptProposal(p.id, "mgr-1");
   });
 
   console.log("\n  Andex AI — scenario & edge-case suite\n  " + "─".repeat(48));

@@ -19,6 +19,7 @@ import {
 } from "@/lib/db/repository";
 import type { GovernedMemoryRecord, PermissionAuditLog } from "@/lib/types";
 import { v4 as uuid } from "uuid";
+import { asPlainText, plainTextLower } from "@/lib/utils/text";
 
 export async function syncGovernedMemoryRegistry(): Promise<GovernedMemoryRecord[]> {
   const [projects, proposals, branches, tasks, featurePacks] = await Promise.all([
@@ -36,14 +37,14 @@ export async function syncGovernedMemoryRegistry(): Promise<GovernedMemoryRecord
 
 function scoreMemory(query: string, record: GovernedMemoryRecord): number {
   const q = query.toLowerCase();
-  const text = `${record.title} ${record.content}`.toLowerCase();
+  const text = `${asPlainText(record.title)} ${asPlainText(record.content)}`.toLowerCase();
   const words = q.split(/\s+/).filter((w) => w.length > 2);
   let score = 0;
   for (const w of words) {
     if (text.includes(w)) score += 2;
   }
   if (record.resourceType === "project_brain") score += 8;
-  if (record.title.toLowerCase().includes(q.slice(0, 24))) score += 5;
+  if (plainTextLower(record.title).includes(q.slice(0, 24))) score += 5;
   return score;
 }
 

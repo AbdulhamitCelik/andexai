@@ -5,6 +5,7 @@ import {
   dbGetCouncilRuns,
 } from "@/lib/db/repository";
 import type { ProjectBrain, Proposal } from "@/lib/types";
+import { asPlainText, plainTextLower } from "@/lib/utils/text";
 
 export interface ProjectBrainContext {
   projectId: string;
@@ -63,18 +64,19 @@ export async function buildImpactAnalysisContext(
   const councilRuns = await dbGetCouncilRuns(proposal.projectId);
 
   const keywords = new Set(
-    `${proposal.title} ${proposal.description}`.toLowerCase().split(/\W+/).filter((w) => w.length > 3)
+    `${asPlainText(proposal.title)} ${asPlainText(proposal.description)}`.toLowerCase().split(/\W+/).filter((w) => w.length > 3)
   );
 
   const relatedProposals = allProposals
     .filter((p) => p.id !== proposal.id)
     .map((p) => {
-      const overlap = keywords.has(p.title.toLowerCase().split(/\W+/)[0])
+      const titleWords = plainTextLower(p.title).split(/\W+/).filter(Boolean);
+      const overlap = titleWords[0] && keywords.has(titleWords[0])
         ? "title keyword overlap"
-        : p.description.toLowerCase().split(/\W+/).some((w) => keywords.has(w))
+        : asPlainText(p.description).toLowerCase().split(/\W+/).some((w) => keywords.has(w))
           ? "description keyword overlap"
           : "same project scope";
-      return { id: p.id, title: p.title, status: p.status, overlap };
+      return { id: p.id, title: asPlainText(p.title), status: p.status, overlap };
     })
     .slice(0, 8);
 
@@ -129,18 +131,20 @@ export async function buildImpactAnalysisContext(
 
   const activeRisks = [
     ...allProposals.flatMap((p) => p.impact?.structured?.risks?.map((r) => r.risk) ?? []),
-    ...targetBrain.institutionalMemory.filter((m) => m.content.toLowerCase().includes("risk")).map((m) => m.title),
+    ...targetBrain.institutionalMemory.filter((m) => plainTextLower(m.content).includes("risk")).map((m) => asPlainText(m.title)),
   ].slice(0, 12);
 
   const constraints = [
     ...(targetBrain.nonFunctionalRequirements ?? []),
-    ...targetBrain.goals.filter((g) => g.toLowerCase().includes("must") || g.toLowerCase().includes("constraint")),
+    ...targetBrain.goals.filter(
+      (g) => plainTextLower(g).includes("must") || plainTextLower(g).includes("constraint")
+    ),
   ];
 
   return {
     proposalId: proposal.id,
-    proposalTitle: proposal.title,
-    proposalText: `${proposal.title}\n\n${proposal.description}`,
+    proposalTitle: asPlainText(proposal.title),
+    proposalText: `${asPlainText(proposal.title)}\n\n${asPlainText(proposal.description)}`,
     projectId: proposal.projectId,
     targetLabel,
     projectBrain: {

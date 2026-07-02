@@ -9,6 +9,7 @@ import {
   IMPACT_JSON_SCHEMA,
 } from "@/lib/agents/impact-validator";
 import { dbGetProposal, dbSaveProposal, dbSaveAgentLog } from "@/lib/db/repository";
+import { asPlainText } from "@/lib/utils/text";
 import { v4 as uuid } from "uuid";
 
 export interface RunImpactAgentInput {
@@ -218,7 +219,7 @@ export async function analyzeAndStoreImpact(
 ): Promise<ImpactAnalysis> {
   const structured = await runImpactAgent({
     proposalId: proposal.id,
-    proposalText: `${proposal.title}\n\n${proposal.description}`,
+    proposalText: `${asPlainText(proposal.title)}\n\n${asPlainText(proposal.description)}`,
     projectId: proposal.projectId,
     userId,
   });

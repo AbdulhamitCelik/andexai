@@ -1,4 +1,5 @@
 import { v4 as uuid } from "uuid";
+import { slugifyText } from "@/lib/utils/text";
 import type {
   CouncilRun,
   DecisionBranch,
@@ -60,7 +61,7 @@ function previewBranch(proposal: Proposal, project: ProjectBrain): DecisionBranc
   return {
     id: `preview-${proposal.id}`,
     projectId: proposal.projectId,
-    name: `preview/${proposal.title.toLowerCase().replace(/\s+/g, "-").slice(0, 28)}`,
+    name: `preview/${slugifyText(proposal.title)}`,
     seedProposalId: proposal.id,
     proposalTitle: proposal.title,
     status: "open",

@@ -15,7 +15,6 @@ import {
   dbSaveTasks,
   dbSaveAgentLog,
   dbGetAgentLogs,
-  dbSaveDriftAlerts,
   dbGetDriftAlerts,
   dbSaveFeedbackItems,
   dbGetFeedbackItems,
@@ -26,16 +25,20 @@ import {
   dbClearDiscoveryForProject,
   dbClearProjectData,
   dbGetCouncilRunsForProposal,
+  dbReplaceDriftAlerts,
 } from "@/lib/db/repository";
 import { runProductDiscoveryAgent, featurePackToProposalText } from "@/lib/agents/product-discovery";
 import { analyzeAndStoreImpact } from "@/lib/agents/impact-agent";
+import { runReviewAgent, buildDeterministicReview } from "@/lib/agents/review-agent";
 import { runPlanningCouncil } from "@/lib/councils/planning-council";
 import { buildResourcePlan, assignTasksFromResources } from "@/lib/engines/resource-engine";
 import { refreshProjectPriorities } from "@/lib/engines/priority-service";
 import {
   councilsCompleteForProposal,
+  runProposalPreApprovalCouncils,
   updateMemoryOnProposalAccept,
 } from "@/lib/proposals/proposal-workflow";
+import { asPlainText, plainTextLower, slugifyText } from "@/lib/utils/text";
 import { getMockFeedback } from "@/lib/discovery/mock-feedback";
 import type {
   AgentLog,
@@ -189,6 +192,8 @@ export async function createProposal(
   targetProjectId?: string,
   targetBranchId?: string
 ): Promise<Proposal> {
+  const safeTitle = asPlainText(title).trim() || "Untitled suggestion";
+  const safeDescription = asPlainText(description).trim() || safeTitle;
   let projectId: string;
 
   if (targetType === "main") {
@@ -207,8 +212,8 @@ export async function createProposal(
 
   const proposal: Proposal = {
     id: uuid(),
-    title,
-    description,
+    title: safeTitle,
+    description: safeDescription,
     authorId,
     authorName,
     status: "draft",
@@ -221,7 +226,7 @@ export async function createProposal(
   };
   await dbSaveProposal(proposal);
   const label = await getTargetLabel(proposal);
-  await log("proposal", "create", title, `Suggestion for ${label}`, proposal.id);
+  await log("proposal", "create", safeTitle, `Suggestion for ${label}`, proposal.id);
   return proposal;
 }
 
@@ -237,13 +242,13 @@ async function gatherContext(proposal: Proposal): Promise<ProposalContext> {
 
   const keywords = proposal.description.toLowerCase().split(/\s+/);
   const relatedArchitecture = targetBrain.architecture
-    .filter((a) => keywords.some((k) => a.name.toLowerCase().includes(k) || a.description.toLowerCase().includes(k)))
+    .filter((a) => keywords.some((k) => plainTextLower(a.name).includes(k) || plainTextLower(a.description).includes(k)))
     .map((a) => a.name);
 
   const duplicates = allProposals
     .filter((p) => p.id !== proposal.id && !["rejected", "archived"].includes(p.status))
-    .filter((p) => p.title.toLowerCase().slice(0, 12) === proposal.title.toLowerCase().slice(0, 12))
-    .map((p) => p.title);
+    .filter((p) => plainTextLower(p.title).slice(0, 12) === plainTextLower(proposal.title).slice(0, 12))
+    .map((p) => asPlainText(p.title));
 
   const context: ProposalContext = {
     relatedDecisions,
@@ -273,44 +278,25 @@ async function generateReview(proposal: Proposal): Promise<ReviewAnalysis> {
     throw new Error("Review Agent requires LLM-generated impact analysis");
   }
 
-  const structured = fresh.impact.structured;
-  const targetLabel = await getTargetLabel(fresh);
-
-  const pros = structured.tradeOffs.map((t) => t.benefit).filter(Boolean);
-  if (pros.length === 0 && structured.summary) pros.push(structured.summary.slice(0, 120));
-
-  const cons = structured.tradeOffs.map((t) => t.cost).filter(Boolean);
-  const risks = structured.risks.map((r) => `${r.risk} (severity: ${r.severity}, likelihood: ${r.likelihood}) — mitigation: ${r.mitigation}`);
-  const tradeoffs = structured.tradeOffs.map(
-    (t) =>
-      `${t.benefit} ↔ ${t.cost}${t.affectedStakeholders.length ? ` [${t.affectedStakeholders.join(", ")}]` : ""}`
-  );
-
-  const questions = [
-    ...structured.implementationNotes.slice(0, 2).map((n) => `Implementation: ${n}`),
-    ...structured.rollbackConsiderations.slice(0, 1).map((r) => `Rollback: ${r}`),
-    `Does this align with ${targetLabel} given recommendation "${structured.recommendation}"?`,
-  ];
-
-  const review: ReviewAnalysis = {
-    pros: pros.length ? pros : [`Addresses: ${fresh.title}`],
-    cons: cons.length ? cons : ["Scope and trade-offs require team discussion"],
-    risks,
-    tradeoffs: tradeoffs.length ? tradeoffs : structured.dependencies.map((d) => d.dependency),
-    questions,
-    suggestedReviewers: [
-      ...new Set(
-        structured.tradeOffs.flatMap((t) => t.affectedStakeholders).filter(Boolean)
-      ),
-    ].slice(0, 5),
-    teamSummary: `${structured.summary} Impact Agent recommendation: ${structured.recommendation.replace(/_/g, " ")}. ${structured.reasoning.slice(0, 280)}${structured.reasoning.length > 280 ? "…" : ""}`,
-  };
+  let review: ReviewAnalysis;
+  try {
+    review = await runReviewAgent(fresh);
+  } catch (e) {
+    review = buildDeterministicReview(fresh);
+    await log(
+      "review",
+      "fallback",
+      asPlainText(fresh.title),
+      e instanceof Error ? e.message : "LLM review unavailable — used impact-derived review",
+      fresh.id
+    );
+  }
 
   fresh.review = review;
   fresh.status = "under_review";
   fresh.updatedAt = new Date().toISOString();
   await dbSaveProposal(fresh);
-  await log("review", "generate", fresh.title, review.teamSummary, fresh.id);
+  await log("review", "generate", asPlainText(fresh.title), review.teamSummary, fresh.id);
   return review;
 }
 
@@ -465,7 +451,7 @@ async function createDecisionBranch(proposal: Proposal): Promise<DecisionBranch>
   const branch: DecisionBranch = {
     id: uuid(),
     projectId: project.id,
-    name: `branch/${proposal.title.toLowerCase().replace(/\s+/g, "-").slice(0, 28)}`,
+    name: `branch/${slugifyText(proposal.title)}`,
     seedProposalId: proposal.id,
     proposalTitle: proposal.title,
     status: "open",
@@ -686,9 +672,7 @@ export async function detectDrift(): Promise<DriftAlert[]> {
     }
   }
 
-  // 2. Implementation drift: active tasks referencing components that are not
-  //    in the relevant brain's architecture (branch brain if the task belongs
-  //    to a known branch, otherwise any project brain).
+  // 2. Implementation drift
   const activeTasks = tasks.filter((t) => !["completed", "cancelled"].includes(t.status));
   for (const task of activeTasks) {
     const branch = branches.find((b) => b.id === task.branchId);
@@ -701,7 +685,7 @@ export async function detectDrift(): Promise<DriftAlert[]> {
         projectId: branch?.projectId,
         severity: "high",
         source: "implementation",
-        description: `Task "${task.title}" references component(s) missing from the project brain: ${phantom.join(", ")}`,
+        description: `Task "${asPlainText(task.title)}" references component(s) missing from the project brain: ${phantom.join(", ")}`,
         recommendation: "Re-scope the task or update the brain — the architecture no longer includes these components",
         detectedAt: now,
       });
@@ -727,14 +711,18 @@ export async function detectDrift(): Promise<DriftAlert[]> {
     }
   }
 
-  if (alerts.length) await dbSaveDriftAlerts(alerts);
+  if (alerts.length) {
+    await dbReplaceDriftAlerts(alerts);
+  } else {
+    await dbReplaceDriftAlerts([]);
+  }
   await log(
     "drift_detection",
     "scan",
     `${projects.length} project(s), ${activeTasks.length} active task(s), ${proposals.length} suggestion(s)`,
     alerts.length ? `${alerts.length} drift alert(s) raised` : "No drift detected — team alignment looks healthy"
   );
-  return alerts;
+  return alerts.length ? await dbGetDriftAlerts() : [];
 }
 
 // ─── Pipelines ───────────────────────────────────────────────────────────────
@@ -753,6 +741,13 @@ export async function runProposalPipeline(
   await analyzeImpact(proposal, authorId);
   const updated = await dbGetProposal(proposal.id);
   if (updated) await generateReview(updated);
+  if (updated?.impact) {
+    try {
+      await runProposalPreApprovalCouncils(proposal.id);
+    } catch {
+      /* councils best-effort during pipeline if impact incomplete */
+    }
+  }
   const label = await getTargetLabel(proposal);
   await log("communication", "notify_slack", `New suggestion for ${label}: ${title}`, "Queued", proposal.id);
   const logs = (await dbGetAgentLogs()).filter((l) => l.proposalId === proposal.id);

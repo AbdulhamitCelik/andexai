@@ -1,4 +1,5 @@
 import { v4 as uuid } from "uuid";
+import { plainTextLower } from "@/lib/utils/text";
 import type {
   DecisionBranch,
   FeaturePack,
@@ -36,7 +37,8 @@ function basePermissions(
 
 function proposalVisibility(proposal: Proposal): MemoryVisibility {
   if (proposal.status === "accepted") return "internal";
-  if (proposal.title.toLowerCase().includes("leadership") || proposal.title.toLowerCase().includes("confidential")) {
+  const title = plainTextLower(proposal.title);
+  if (title.includes("leadership") || title.includes("confidential")) {
     return "leadership";
   }
   if (["under_review", "consensus_pending", "ready_for_manager", "impact_analyzed"].includes(proposal.status)) {

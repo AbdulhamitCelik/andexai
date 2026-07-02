@@ -1,4 +1,5 @@
 import { connectDB } from "./mongodb";
+import { dedupeDriftAlerts, stableDriftId } from "@/lib/agents/drift-utils";
 import {
   ProjectModel,
   ProposalModel,
@@ -140,7 +141,22 @@ export async function dbSaveDriftAlerts(alerts: DriftAlert[]): Promise<void> {
 
 export async function dbGetDriftAlerts(): Promise<DriftAlert[]> {
   await ensureDb();
-  return (await DriftAlertModel.find().lean()) as DriftAlert[];
+  const all = (await DriftAlertModel.find().lean()) as DriftAlert[];
+  return dedupeDriftAlerts(all);
+}
+
+/** Replace drift alerts with the latest scan — stable IDs prevent duplicates. */
+export async function dbReplaceDriftAlerts(alerts: DriftAlert[]): Promise<DriftAlert[]> {
+  await ensureDb();
+  const normalized = alerts.map((a) => ({
+    ...a,
+    id: stableDriftId(a),
+  }));
+  await DriftAlertModel.deleteMany({});
+  if (normalized.length) {
+    await DriftAlertModel.insertMany(normalized);
+  }
+  return normalized;
 }
 
 /** Remove a project's proposals, branches, tasks, and drift alerts (used to re-seed demos deterministically). */
