@@ -1,20 +1,22 @@
 // Scenario / edge-case test harness for the decision-governance pipeline.
 //
-// Drives the orchestrator against the Metropolitan University fixture (MongoDB).
+// Drives the orchestrator against the Metropolitan University fixture.
+// Requires MONGODB_URI — the suite talks to the same MongoDB the app uses
+// (the npm script loads it from .env.local). Re-seeding is idempotent: the
+// university project's data is cleared and rebuilt through the real pipeline
+// on every run.
+//
 // Run: npm run test:scenarios
 
 import { connectDB } from "@/lib/db/mongodb";
 import {
   seedUniversity,
   getProposals,
-  getBranches,
-  getDriftAlerts,
+  getBranchesForProject,
+  detectDrift,
   createProposal,
-  runProposalPipeline,
   castVote,
   tallyVotes,
-  managerAcceptProposal,
-  managerDeclineProposal,
 } from "@/lib/agents/orchestrator";
 
 let passed = 0;
@@ -38,34 +40,40 @@ async function expectThrow(name: string, fn: () => Promise<void>) {
 async function main() {
   await connectDB();
 
-  await seedUniversity();
-  const proposals = await getProposals();
+  const brain = await seedUniversity();
+  const proposals = await getProposals(brain.id);
   const find = (frag: string) => proposals.find((p) => p.title.includes(frag));
   const mongo = find("MongoDB");
   const oidc = find("OpenID Connect");
+  const tied = find("Independent Microservices");
+  const branches = await getBranchesForProject(brain.id);
 
+  // A — pipeline outcomes
   check("A1 · seeds exactly 6 proposals", proposals.length === 6, `got ${proposals.length}`);
   check("A2 · OIDC migration accepted (happy path)", oidc?.status === "accepted", `status=${oidc?.status}`);
+  check("A3 · rejection majority ends rejected only via manager decline", mongo?.status === "rejected", `status=${mongo?.status}`);
   check(
-    "A3 · MongoDB proposal rejected or blocked",
-    mongo?.status === "rejected" || mongo?.status === "needs_discussion",
-    `status=${mongo?.status}`
-  );
-  check(
-    "A4 · facial-recognition -> needs_discussion",
+    "A4 · single needs_discussion vote blocks approval",
     find("Facial-Recognition")?.status === "needs_discussion",
     `status=${find("Facial-Recognition")?.status}`
   );
-
   check(
-    "B1 · tied 2-2 vote does NOT auto-approve",
-    find("Independent Microservices")?.status === "consensus_pending" ||
-      find("Independent Microservices")?.status === "needs_discussion",
-    `status=${find("Independent Microservices")?.status}`
+    "A5 · no branch created for the rejected proposal",
+    branches.every((b) => b.seedProposalId !== mongo?.id),
+    `branches=${branches.length}`
   );
-  const branches = await getBranches();
-  check("B2 · at least one branch from accepted proposal", branches.length >= 1, `branches=${branches.length}`);
 
+  // B — consensus + versioning
+  check("B1 · tied 2-2 vote stays consensus_pending (no auto-approve)", tied?.status === "consensus_pending", `status=${tied?.status}`);
+  const oidcBranch = branches.find((b) => b.seedProposalId === oidc?.id);
+  check("B2 · accepted proposal opened a decision branch", Boolean(oidcBranch), `branches=${branches.length}`);
+  check(
+    "B3 · version bumps on the branch only, project unchanged",
+    oidcBranch?.version === "3.2.1" && oidcBranch?.mainVersionAtCreation === "3.2.0",
+    `branch=${oidcBranch?.version} main@creation=${oidcBranch?.mainVersionAtCreation}`
+  );
+
+  // C — duplicates
   const dup = find("second attempt");
   check(
     "C1 · near-duplicate proposal is flagged",
@@ -73,14 +81,32 @@ async function main() {
     `duplicates=${JSON.stringify(dup?.context?.duplicates)}`
   );
 
-  const alerts = await getDriftAlerts();
-  check("D1 · drift alerts generated", alerts.length >= 0, `${alerts.length} alerts`);
+  // D — drift detection
+  const alerts = await detectDrift();
+  check(
+    "D1 · implementation drift: phantom component caught",
+    alerts.some((a) => a.source === "implementation" && a.description.includes("Legacy Student Portal")),
+    `${alerts.length} alerts`
+  );
+  check(
+    "D2 · backlog drift: >3 open suggestions flagged",
+    alerts.some((a) => a.source === "backlog" && a.projectId === brain.id),
+    `${alerts.length} alerts`
+  );
 
-  const e1 = await createProposal("", "   ", "wkr-1", "Alex", "main", (await getProposals())[0]?.projectId);
-  check("E1 · empty/whitespace proposal handled", Boolean(e1.id));
+  // E — hostile / degenerate input
+  const e1 = await createProposal("", "   ", "wkr-1", "Alex", "main", brain.id);
+  check("E1 · empty/whitespace proposal handled without crash", Boolean(e1.id));
 
-  await expectThrow("F1 · vote on non-existent proposal throws", async () => {
+  // F — error paths
+  await expectThrow("F1 · vote on a non-existent proposal throws", async () => {
     await castVote("does-not-exist", "wkr-1", "Alex", "approve");
+  });
+  await expectThrow("F2 · tally with zero votes throws", async () => {
+    await tallyVotes(e1.id);
+  });
+  await expectThrow("F3 · manager cannot vote (workers only)", async () => {
+    await castVote(tied?.id ?? "missing", "mgr-1", "Sarah", "approve");
   });
 
   console.log("\n  Andex AI — scenario & edge-case suite\n  " + "─".repeat(48));

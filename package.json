@@ -9,9 +9,9 @@
     "lint": "next lint",
     "db:init": "curl -X POST http://localhost:3000/api/db/init",
     "db:push": "prisma db push",
-    "db:seed": "tsx prisma/seed.ts",
+    "db:seed": "curl -X POST http://localhost:3000/api/project",
     "test:llm": "node --env-file=.env.local scripts/test-llm.mjs",
-    "test:scenarios": "tsx scripts/test-scenarios.ts"
+    "test:scenarios": "node --env-file=.env.local --import tsx scripts/test-scenarios.ts"
   },
   "dependencies": {
     "@prisma/client": "6.5.0",

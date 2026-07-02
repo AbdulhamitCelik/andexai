@@ -24,6 +24,7 @@ import {
   dbGetFeaturePack,
   dbSaveFeaturePack,
   dbClearDiscoveryForProject,
+  dbClearProjectData,
 } from "@/lib/db/repository";
 import { runProductDiscoveryAgent, featurePackToProposalText } from "@/lib/agents/product-discovery";
 import { getMockFeedback } from "@/lib/discovery/mock-feedback";
@@ -380,11 +381,26 @@ export async function tallyVotes(proposalId: string): Promise<Proposal> {
 
   const approvals = proposal.votes.filter((v) => v.vote === "approve" || v.vote === "approve_with_comments").length;
   const rejections = proposal.votes.filter((v) => v.vote === "reject").length;
+  const discussions = proposal.votes.filter((v) => v.vote === "needs_discussion").length;
 
-  proposal.status = rejections > approvals ? "needs_discussion" : "ready_for_manager";
+  // Conservative human-in-the-loop governance: any needs_discussion vote or a
+  // rejection majority sends the suggestion back to the team; a tie stays
+  // pending for a human tie-break. Only a clear approval majority reaches the
+  // manager — and even then the manager still decides (never auto-approved).
+  if (discussions > 0) proposal.status = "needs_discussion";
+  else if (rejections > approvals) proposal.status = "needs_discussion";
+  else if (approvals === rejections) proposal.status = "consensus_pending";
+  else proposal.status = "ready_for_manager";
+
   proposal.updatedAt = new Date().toISOString();
   await dbSaveProposal(proposal);
-  await log("consensus", "tally", proposalId, `Ready for manager — ${approvals} approve, ${rejections} reject`, proposalId);
+  await log(
+    "consensus",
+    "tally",
+    proposalId,
+    `${approvals} approve, ${rejections} reject, ${discussions} needs-discussion → ${proposal.status}`,
+    proposalId
+  );
   return proposal;
 }
 
@@ -644,7 +660,11 @@ export async function detectDrift(): Promise<DriftAlert[]> {
   const alerts: DriftAlert[] = [];
   const branches = await dbGetBranches();
   const proposals = await dbGetProposals();
+  const projects = await dbGetProjects();
+  const tasks = await dbGetTasks();
+  const now = new Date().toISOString();
 
+  // 1. Pending suggestions piling up on a branch that is already implementing.
   for (const branch of branches.filter((b) => b.status === "implementing")) {
     const pending = proposals.filter(
       (p) => p.targetBranchId === branch.id && ["under_review", "consensus_pending", "ready_for_manager"].includes(p.status)
@@ -652,14 +672,57 @@ export async function detectDrift(): Promise<DriftAlert[]> {
     if (pending.length > 0) {
       alerts.push({
         id: uuid(),
+        projectId: branch.projectId,
         severity: "medium",
         source: "implementation",
         description: `${pending.length} pending suggestion(s) on implementing branch "${branch.name}"`,
         recommendation: "Manager should review before implementation diverges",
-        detectedAt: new Date().toISOString(),
+        detectedAt: now,
       });
     }
   }
+
+  // 2. Implementation drift: active tasks referencing components that are not
+  //    in the relevant brain's architecture (branch brain if the task belongs
+  //    to a known branch, otherwise any project brain).
+  const activeTasks = tasks.filter((t) => !["completed", "cancelled"].includes(t.status));
+  for (const task of activeTasks) {
+    const branch = branches.find((b) => b.id === task.branchId);
+    const architecture = branch ? branch.mergedBrain.architecture : projects.flatMap((p) => p.architecture);
+    const known = new Set(architecture.map((a) => a.name));
+    const phantom = task.affectedComponents.filter((c) => !known.has(c));
+    if (phantom.length > 0) {
+      alerts.push({
+        id: uuid(),
+        projectId: branch?.projectId,
+        severity: "high",
+        source: "implementation",
+        description: `Task "${task.title}" references component(s) missing from the project brain: ${phantom.join(", ")}`,
+        recommendation: "Re-scope the task or update the brain — the architecture no longer includes these components",
+        detectedAt: now,
+      });
+    }
+  }
+
+  // 3. Backlog drift: more than 3 open suggestions on one project means the
+  //    team's shared understanding is likely diverging from the brain.
+  for (const project of projects) {
+    const open = proposals.filter(
+      (p) => p.projectId === project.id && !["accepted", "rejected", "archived"].includes(p.status)
+    );
+    if (open.length > 3) {
+      alerts.push({
+        id: uuid(),
+        projectId: project.id,
+        severity: "medium",
+        source: "backlog",
+        description: `${open.length} open suggestions on "${project.name}" — decision backlog is growing`,
+        recommendation: "Review, decide, or archive stale suggestions to keep shared understanding current",
+        detectedAt: now,
+      });
+    }
+  }
+
   if (alerts.length) await dbSaveDriftAlerts(alerts);
   return alerts;
 }
@@ -902,6 +965,7 @@ export async function seedUniversity(): Promise<ProjectBrain> {
   brain.createdBy = "mgr-1";
   brain.createdAt = now;
   brain.updatedAt = now;
+  await dbClearProjectData(brain.id); // idempotent re-seed
   await dbSaveProject(brain);
   await log("project_brain", "seed", "university", "Metropolitan University demo initialized");
 
@@ -929,8 +993,10 @@ export async function seedUniversity(): Promise<ProjectBrain> {
         await managerAcceptProposal(proposal.id, "mgr-1");
       }
     } else if (spec.finalize === "check") {
-      const updated = await dbGetProposal(proposal.id);
-      if (updated && updated.status === "ready_for_manager" && spec.expectStatus === "rejected") {
+      // A rejection majority alone never sets "rejected" — only the manager
+      // can decline. The fixture's manager declines where the panel clearly
+      // voted the proposal down.
+      if (spec.expectStatus === "rejected") {
         await managerDeclineProposal(proposal.id, "mgr-1", "Rejected by manager after team review");
       }
     }
