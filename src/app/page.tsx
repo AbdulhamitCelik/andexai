@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import type { ProjectBrain, Proposal, AgentLog, DriftAlert } from "@/lib/types";
 import { GitBranch, FileText, AlertTriangle, ArrowRight, FolderOpen, Workflow } from "lucide-react";
 import { AskBrain } from "@/components/ask-brain";
+import { AndexLogo } from "@/components/brand/andex-logo";
 import { BrainRankingsPanel, DecisionIntelligencePanel } from "@/components/intelligence/intelligence-panel";
 import { PageLoader } from "@/components/ui/loading-state";
 import { useShortcuts } from "@/lib/context/shortcuts-context";
@@ -121,12 +122,10 @@ function DashboardContent() {
       )}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-primary/80">
+          <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-primary/80">
             Dashboard
           </p>
-          <h1 className="text-4xl font-bold tracking-tight">
-            <span className="text-gradient">Andex AI</span>
-          </h1>
+          <AndexLogo size="sm" className="mb-2" />
           <p className="mt-2 max-w-2xl text-muted-foreground">
             {stats.projects > 0
               ? `${stats.projects} project(s) — team adds suggestions, workers vote, manager decides.`

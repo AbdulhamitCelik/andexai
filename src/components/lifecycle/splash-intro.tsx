@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { AndexLogo } from "@/components/brand/andex-logo";
 
 const PETALS = Array.from({ length: 24 }, (_, i) => ({
   id: i,
@@ -57,12 +58,12 @@ export function SplashIntro() {
       ))}
 
       <div className="relative z-10 flex flex-col items-center justify-center text-center px-6">
-        <p className="font-display text-sm font-light tracking-[0.35em] uppercase text-rose-200/80 mb-4 animate-splash-rise">
+        <p className="font-display text-sm font-light tracking-[0.35em] uppercase text-rose-200/80 mb-6 animate-splash-rise">
           The product journey
         </p>
-        <h1 className="font-display text-5xl md:text-7xl font-light text-white/95 mb-3 animate-splash-rise splash-delay-1">
-          Andex AI
-        </h1>
+        <div className="animate-splash-rise splash-delay-1 mb-4 rounded-xl bg-white p-4 shadow-2xl shadow-black/20">
+          <AndexLogo size="lg" priority />
+        </div>
         <p className="font-display text-xl md:text-2xl font-light text-white/60 tracking-wide animate-splash-rise splash-delay-2">
           Councils guide the path of product
         </p>

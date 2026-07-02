@@ -11,6 +11,10 @@ export const metadata: Metadata = {
   title: "Andex AI — Product Operating System",
   description:
     "AI Councils coordinate the full product lifecycle. Humans approve every important decision.",
+  icons: {
+    icon: "/andex-logo.png",
+    apple: "/andex-logo.png",
+  },
 };
 
 export default function RootLayout({

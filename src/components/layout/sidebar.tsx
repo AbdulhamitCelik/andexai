@@ -14,7 +14,6 @@ import {
   FileText,
   Activity,
   AlertTriangle,
-  Sparkles,
   User,
   ClipboardList,
   Lightbulb,
@@ -28,6 +27,7 @@ import {
   PanelLeft,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { AndexLogo } from "@/components/brand/andex-logo";
 import { useTheme } from "@/lib/context/theme-context";
 import { useShortcuts } from "@/lib/context/shortcuts-context";
 import { Button } from "@/components/ui/button";
@@ -83,19 +83,12 @@ export function Sidebar({ collapsed = false }: { collapsed?: boolean }) {
       )}
     >
       <div className={cn("border-b border-border/70", collapsed ? "p-3" : "p-6")}>
-        <Link href="/" className="flex items-center gap-2">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-violet-500 shadow-lg shadow-primary/30">
-            <Sparkles className="h-5 w-5 text-white" />
-          </div>
+        <div className={collapsed ? "flex justify-center" : "space-y-3"}>
+          <AndexLogo href="/" iconOnly={collapsed} size={collapsed ? "sm" : "md"} priority />
           {!collapsed && (
-            <div>
-              <h1 className="text-lg font-bold leading-none tracking-tight">
-                <span className="text-gradient">Andex</span> AI
-              </h1>
-              <p className="mt-1 text-[11px] text-muted-foreground tracking-wide">AI councils for product development</p>
-            </div>
+            <p className="text-[11px] text-muted-foreground tracking-wide">AI councils for product development</p>
           )}
-        </Link>
+        </div>
         {!collapsed && (
           <div className="mt-3 flex gap-1">
             <Button variant="outline" size="sm" className="flex-1 h-8 text-[10px] gap-1 px-2" onClick={() => setCommandOpen(true)}>
