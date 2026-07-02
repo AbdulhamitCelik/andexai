@@ -19,13 +19,15 @@ Copy the template and fill in at least one key:
 cp .env.example .env.local
 ```
 
-| Provider   | Env var             | Get a free key                                            |
-| ---------- | ------------------- | -------------------------------------------------------- |
-| Groq       | `GROQ_API_KEY`      | <https://console.groq.com/keys>                          |
-| Cerebras   | `CEREBRAS_API_KEY`  | <https://cloud.cerebras.ai>                              |
-| OpenRouter | `OPENROUTER_API_KEY`| <https://openrouter.ai/keys>                             |
-| NVIDIA NIM | `NVIDIA_API_KEY`    | <https://build.nvidia.com>                               |
-| Mistral    | `MISTRAL_API_KEY`   | <https://console.mistral.ai/api-keys>                    |
+| Provider   | Env var              | Get a free key                                           |
+| ---------- | -------------------- | -------------------------------------------------------- |
+| Groq       | `GROQ_API_KEY`       | <https://console.groq.com/keys>                          |
+| Cerebras   | `CEREBRAS_API_KEY`   | <https://cloud.cerebras.ai>                              |
+| OpenRouter | `OPENROUTER_API_KEY` | <https://openrouter.ai/keys>                             |
+| NVIDIA NIM | `NVIDIA_API_KEY`     | <https://build.nvidia.com>                               |
+| Mistral    | `MISTRAL_API_KEY`    | <https://console.mistral.ai/api-keys>                    |
+| SambaNova  | `SAMBANOVA_API_KEY`  | <https://cloud.sambanova.ai>                             |
+| Cohere     | `COHERE_API_KEY`     | <https://dashboard.cohere.com/api-keys>                  |
 
 `.env.local` is gitignored — real keys never get committed.
 
@@ -71,7 +73,7 @@ await chat("Ping", { provider: "groq" });
 
 | Option        | Type                  | Default        | Notes                              |
 | ------------- | --------------------- | -------------- | ---------------------------------- |
-| `provider`    | `string`              | first configured | Provider id: `groq`, `cerebras`, `openrouter`, `nvidia`, `mistral` |
+| `provider`    | `string`              | first configured | Provider id: `groq`, `cerebras`, `openrouter`, `nvidia`, `mistral`, `sambanova`, `cohere` |
 | `model`       | `string`              | provider default | Override the model                 |
 | `system`      | `string`              | —              | Prepended system prompt            |
 | `temperature` | `number`              | `0.7`          | 0–2                                |
@@ -121,9 +123,27 @@ Body fields: `prompt` (string) **or** `messages` (array), plus optional
 { "text": "Mental model drift is …", "provider": "groq", "model": "llama-3.3-70b-versatile" }
 ```
 
+### `/api/llm` vs `/api/memory/ask` (Ask the Project Brain)
+
+`/api/llm` is the **raw** provider layer: status and plain completions, no
+project context, no permissions.
+
 The dashboard's **"Ask the Project Brain"** widget
-([`src/components/ask-brain.tsx`](../src/components/ask-brain.tsx)) is a live
-example of this endpoint.
+([`src/components/ask-brain.tsx`](../src/components/ask-brain.tsx)) does **not**
+call `/api/llm` — it calls **`POST /api/memory/ask`** with
+`{ userId, projectId, prompt }`. That route runs **permission-governed memory
+retrieval** ([`src/lib/governance/memory-retrieval.ts`](../src/lib/governance/memory-retrieval.ts)):
+the user's memory role (manager / developer / intern) filters the governed
+memory registry **before** any context is sent to the LLM, restricted items are
+never leaked into the prompt, and every access decision is written to the
+permission audit log. It responds with the answer plus how many memories were
+authorised vs filtered, or `403` when access is denied.
+
+```bash
+curl -X POST http://localhost:3000/api/memory/ask \
+  -H "Content-Type: application/json" \
+  -d '{"userId":"wkr-1","projectId":"<PROJECT_ID>","prompt":"What are the leadership strategy notes?"}'
+```
 
 ---
 

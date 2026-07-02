@@ -431,9 +431,11 @@ Create
 
 Decision Branches
 
-Merge
+Merge to project
 
-Rollback
+Discard
+
+Rollback (future)
 
 History
 
@@ -530,9 +532,11 @@ Everything else remains unchanged
 
 The system should behave exactly like Git.
 
-Every proposal creates a new version of the project.
+Every accepted proposal creates a new version on its decision branch; the
+project only changes when a branch is merged.
 
-Rollback is always possible.
+Branches can always be discarded with zero side effects (point-in-time
+rollback of merged decisions: future / stretch).
 
 
 ---------------------------------------
@@ -610,45 +614,47 @@ Shared organisational knowledge
 
 Frontend
 
-Next.js
+Next.js 15 (App Router)
 
-React
+React 19
 
 TailwindCSS
 
-shadcn/ui
+shadcn/ui-style components
 
 Backend
 
-FastAPI
-
-or
-
-Hono
+Next.js API Routes (App Router route handlers)
 
 Database
 
-PostgreSQL
+MongoDB Atlas via Mongoose (MONGODB_URI)
 
-pgvector
+(PostgreSQL/pgvector remains in the repo as a legacy Prisma scaffold only)
 
 Knowledge Graph
 
-Neo4j (stretch goal)
+Neo4j (future / stretch goal)
 
 LLMs
 
-OpenAI
+OpenAI-compatible provider abstraction layer with automatic fallback:
 
-Claude
+Groq
 
-Gemini
+Cerebras
 
-DeepSeek
+OpenRouter
 
-Provider abstraction layer
+NVIDIA NIM
 
-Integrations
+Mistral
+
+SambaNova
+
+Cohere
+
+Integrations (future / stretch)
 
 GitHub API
 
@@ -662,15 +668,11 @@ Notion API
 
 Authentication
 
-Clerk (optional)
+Demo role switcher today; Clerk (future / stretch)
 
 Deployment
 
-Azure
-
 Vercel
-
-Docker
 
 
 --------------------------------------------------------------
@@ -723,7 +725,7 @@ History preserved.
 
 ↓
 
-Rollback demonstrated.
+Branch merge / discard demonstrated.
 
 ---------------------------------------------------------
 
