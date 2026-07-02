@@ -181,3 +181,22 @@ export const AGENT_COLORS: Record<string, string> = {
   analytics: "bg-teal-500/20 text-teal-400",
   orchestrator: "bg-amber-500/20 text-amber-400",
 };
+
+export const AGENT_CARD_STYLES: Record<string, string> = {
+  project_brain: "border-purple-500/30 bg-purple-500/10",
+  proposal: "border-blue-500/30 bg-blue-500/10",
+  impact: "border-orange-500/30 bg-orange-500/10",
+  review: "border-cyan-500/30 bg-cyan-500/10",
+  consensus: "border-green-500/30 bg-green-500/10",
+  branch: "border-pink-500/30 bg-pink-500/10",
+  implementation: "border-yellow-500/30 bg-yellow-500/10",
+  knowledge: "border-slate-500/30 bg-slate-500/10",
+  communication: "border-indigo-500/30 bg-indigo-500/10",
+  drift_detection: "border-red-500/30 bg-red-500/10",
+  product_discovery: "border-violet-500/30 bg-violet-500/10",
+  progress: "border-emerald-500/30 bg-emerald-500/10",
+  evolution: "border-fuchsia-500/30 bg-fuchsia-500/10",
+  permission: "border-stone-500/30 bg-stone-500/10",
+  analytics: "border-teal-500/30 bg-teal-500/10",
+  orchestrator: "border-amber-500/30 bg-amber-500/10",
+};

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Card, CardContent } from "@/components/ui/card";
 import type { AgentLog } from "@/lib/types";
-import { AGENT_COLORS, AGENT_SKILLS } from "@/lib/agents/skills";
+import { AGENT_CARD_STYLES, AGENT_COLORS, AGENT_SKILLS } from "@/lib/agents/skills";
 
 export default function AgentsPage() {
   const [logs, setLogs] = useState<AgentLog[]>([]);
@@ -36,7 +36,7 @@ export default function AgentsPage() {
 
         <section className="space-y-8 mb-8">
           {Object.entries(AGENT_SKILLS).map(([agent, config]) => (
-            <Card key={agent} className="border">
+            <Card key={agent} className={`border ${AGENT_CARD_STYLES[agent] ?? "bg-secondary"}`}>
               <CardContent className="p-4">
                 <h2 className="text-lg font-semibold">{config.title}</h2>
                 <ul className="mt-3 space-y-1 text-sm text-muted-foreground">
@@ -53,7 +53,7 @@ export default function AgentsPage() {
 
         <div className="space-y-2">
           {logs.map((log) => (
-            <Card key={log.id}>
+            <Card key={log.id} className={`border ${AGENT_CARD_STYLES[log.agent] ?? "bg-secondary"}`}>
               <CardContent className="p-4">
                 <div className="flex items-start gap-3">
                   <span className={`shrink-0 rounded px-2 py-0.5 text-[10px] font-medium ${AGENT_COLORS[log.agent] ?? "bg-secondary"}`}>

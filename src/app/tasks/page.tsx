@@ -4,27 +4,32 @@ import { useEffect, useState } from "react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import type { ImplementationTask, DecisionBranch, Proposal } from "@/lib/types";
+import type { ImplementationTask, DecisionBranch, Proposal, ProjectBrain } from "@/lib/types";
 
 export default function TasksPage() {
   const [tasks, setTasks] = useState<ImplementationTask[]>([]);
   const [branches, setBranches] = useState<DecisionBranch[]>([]);
   const [proposals, setProposals] = useState<Proposal[]>([]);
+  const [projects, setProjects] = useState<ProjectBrain[]>([]);
 
   useEffect(() => {
     Promise.all([
       fetch("/api/tasks").then((r) => r.json()),
       fetch("/api/branches").then((r) => r.json()),
       fetch("/api/proposals").then((r) => r.json()),
-    ]).then(([tasksData, branchesData, proposalsData]) => {
+      fetch("/api/project").then((r) => r.json()),
+    ]).then(([tasksData, branchesData, proposalsData, projectsData]) => {
       setTasks(tasksData.tasks);
       setBranches(branchesData.branches.filter((b: DecisionBranch) => b.status === "implementing"));
       setProposals(proposalsData.proposals ?? []);
+      setProjects(projectsData.projects ?? []);
     });
   }, []);
 
   const proposalTitle = (proposalId?: string) =>
     proposals.find((p) => p.id === proposalId)?.title ?? "Accepted suggestion";
+
+  const projectName = (projectId?: string) => projects.find((p) => p.id === projectId)?.name ?? "Unknown project";
 
   const byBranch = branches.map((branch) => ({
     branch,
@@ -51,8 +56,11 @@ export default function TasksPage() {
           byBranch.map(({ branch, tasks: branchTasks }) => (
             <Card key={branch.id}>
               <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-base font-mono">{branch.name}</CardTitle>
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <CardTitle className="text-base font-mono">{branch.name}</CardTitle>
+                    <p className="text-xs text-muted-foreground mt-1">Project: {projectName(branch.projectId)}</p>
+                  </div>
                   <Badge variant="warning">implementing</Badge>
                 </div>
               </CardHeader>
