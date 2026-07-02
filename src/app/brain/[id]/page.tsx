@@ -103,7 +103,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
           <ArrowLeft className="h-4 w-4" /> All projects
         </Link>
 
-        <div className="flex items-start justify-between gap-4">
+        <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold">{project.name}</h1>
             <Badge className="mt-2">v{project.currentVersion}</Badge>

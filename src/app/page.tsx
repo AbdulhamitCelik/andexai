@@ -66,7 +66,7 @@ function DashboardContent() {
 
   return (
     <div className="animate-in space-y-8 p-8">
-      <div className="flex items-start justify-between">
+      <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-primary/80">
             Dashboard
