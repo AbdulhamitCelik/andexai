@@ -1,17 +1,31 @@
 "use client";
 
-import { useEffect, useState, use } from "react";
+import { useCallback, useEffect, useState, use, useRef } from "react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useUser } from "@/lib/context/user-context";
 import type { Proposal } from "@/lib/types";
+import type { ProposalWorkflowState } from "@/lib/proposals/proposal-workflow";
 import Link from "next/link";
-import { ArrowLeft, Check, X, MessageSquare, ThumbsUp, ThumbsDown } from "lucide-react";
+import {
+  ArrowLeft,
+  Check,
+  X,
+  MessageSquare,
+  ThumbsUp,
+  ThumbsDown,
+  Loader2,
+  RefreshCw,
+  ShieldAlert,
+  Play,
+} from "lucide-react";
 import type { VoteType } from "@/lib/types";
 import { ImpactAnalysisPanel } from "@/components/proposals/impact-analysis-panel";
-import { Loader2, RefreshCw } from "lucide-react";
+import { DecisionTimeline } from "@/components/proposals/decision-timeline";
+import { ProposalEnterpriseReport } from "@/components/proposals/proposal-enterprise-report";
+import { LoadingState } from "@/components/ui/loading-state";
 
 const COMMENT_VOTES: VoteType[] = ["approve_with_comments", "needs_discussion"];
 
@@ -19,33 +33,81 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ id: s
   const { id } = use(params);
   const { currentUser, isManager, isWorker } = useUser();
   const [proposal, setProposal] = useState<Proposal | null>(null);
+  const [workflow, setWorkflow] = useState<ProposalWorkflowState | null>(null);
   const [loading, setLoading] = useState(true);
   const [pendingVote, setPendingVote] = useState<VoteType | null>(null);
   const [voteComment, setVoteComment] = useState("");
   const [submittingVote, setSubmittingVote] = useState(false);
   const [rerunningImpact, setRerunningImpact] = useState(false);
+  const [runningCouncils, setRunningCouncils] = useState(false);
   const [acting, setActing] = useState(false);
   const [loadFailed, setLoadFailed] = useState(false);
+  const [workflowError, setWorkflowError] = useState("");
+  const councilsAutoRan = useRef(false);
 
-  const load = () =>
-    fetch(`/api/proposals/${id}`)
+  const loadProposal = useCallback(() => {
+    return fetch(`/api/proposals/${id}`)
       .then((r) => r.json())
       .then((d) => {
         setProposal(d.proposal ?? null);
         setLoadFailed(false);
       })
-      .catch(() => setLoadFailed(true))
-      .finally(() => setLoading(false));
+      .catch(() => setLoadFailed(true));
+  }, [id]);
+
+  const loadWorkflow = useCallback(async () => {
+    const res = await fetch(`/api/proposals/${id}/workflow`);
+    const data = await res.json();
+    if (!res.ok) {
+      setWorkflowError(data.error ?? "Failed to load workflow");
+      return null;
+    }
+    setWorkflowError("");
+    setWorkflow(data.workflow);
+    return data.workflow as ProposalWorkflowState;
+  }, [id]);
+
+  const loadAll = useCallback(async () => {
+    setLoading(true);
+    await Promise.all([loadProposal(), loadWorkflow()]);
+    setLoading(false);
+  }, [loadProposal, loadWorkflow]);
 
   useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    loadAll();
+  }, [loadAll]);
+
+  const runCouncils = useCallback(async () => {
+    setRunningCouncils(true);
+    setWorkflowError("");
+    try {
+      const res = await fetch(`/api/proposals/${id}/workflow`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "run_councils" }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Council run failed");
+      setWorkflow(data.workflow);
+    } catch (e) {
+      setWorkflowError(e instanceof Error ? e.message : "Council run failed");
+    } finally {
+      setRunningCouncils(false);
+    }
   }, [id]);
+
+  // Auto-run councils once after impact analysis for demo flow
+  useEffect(() => {
+    if (!proposal?.impact || !workflow || runningCouncils || councilsAutoRan.current) return;
+    if (workflow.gates.councilsComplete) return;
+    councilsAutoRan.current = true;
+    runCouncils();
+  }, [proposal?.impact, workflow, runningCouncils, runCouncils]);
 
   const submitVote = async (voteType: VoteType, comment?: string) => {
     setSubmittingVote(true);
     try {
-      await fetch("/api/proposals", {
+      const voteRes = await fetch("/api/proposals", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -57,16 +119,22 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ id: s
           comment: comment?.trim() || undefined,
         }),
       });
-      await fetch("/api/proposals", {
+      const voteData = await voteRes.json();
+      if (!voteRes.ok) throw new Error(voteData.error ?? "Vote failed");
+
+      const tallyRes = await fetch("/api/proposals", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ proposalId: id, action: "tally" }),
       });
+      const tallyData = await tallyRes.json();
+      if (!tallyRes.ok) throw new Error(tallyData.error ?? "Tally failed");
+
       setPendingVote(null);
       setVoteComment("");
-      load();
-    } catch {
-      alert("Failed to submit vote — is the backend running?");
+      await loadAll();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Failed to submit vote");
     } finally {
       setSubmittingVote(false);
     }
@@ -101,7 +169,7 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ id: s
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Impact analysis failed");
       if (data.proposal) setProposal(data.proposal);
-      else load();
+      await loadAll();
     } catch (e) {
       alert(e instanceof Error ? e.message : "Impact analysis failed");
     } finally {
@@ -112,20 +180,29 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ id: s
   const managerAction = async (action: "accept" | "decline") => {
     setActing(true);
     try {
-      await fetch("/api/proposals", {
+      const res = await fetch("/api/proposals", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ proposalId: id, action, userId: currentUser.id }),
       });
-      await load();
-    } catch {
-      alert("Action failed — is the backend running?");
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Action failed");
+      await loadAll();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Action failed");
     } finally {
       setActing(false);
     }
   };
 
-  if (loading) return <AppShell><div className="p-8">Loading...</div></AppShell>;
+  if (loading) {
+    return (
+      <AppShell>
+        <LoadingState message="Loading enterprise workflow…" className="min-h-[50vh]" />
+      </AppShell>
+    );
+  }
+
   if (loadFailed) {
     return (
       <AppShell>
@@ -135,15 +212,21 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ id: s
       </AppShell>
     );
   }
+
   if (!proposal) return <AppShell><div className="p-8">Not found</div></AppShell>;
 
-  const canVoteNow = isWorker && ["under_review", "consensus_pending", "ready_for_manager", "needs_discussion"].includes(proposal.status);
-  const canManageNow = isManager && !["accepted", "rejected", "archived"].includes(proposal.status);
+  const gates = workflow?.gates;
+  const canVoteNow =
+    isWorker &&
+    Boolean(gates?.canVote) &&
+    ["under_review", "consensus_pending", "needs_discussion"].includes(proposal.status);
+  const canManageNow =
+    isManager && !["accepted", "rejected", "archived"].includes(proposal.status);
   const myVote = proposal.votes?.find((v) => v.userId === currentUser.id);
 
   return (
     <AppShell>
-      <div className="p-8 space-y-6 max-w-4xl">
+      <div className="p-8 space-y-6 max-w-5xl">
         <Link href="/proposals" className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
           <ArrowLeft className="h-4 w-4" /> Back to suggestions
         </Link>
@@ -157,6 +240,71 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ id: s
           <p className="mt-2 text-muted-foreground">{proposal.description}</p>
           <p className="mt-1 text-xs text-muted-foreground">by {proposal.authorName}</p>
         </div>
+
+        {workflow && <DecisionTimeline steps={workflow.steps} />}
+
+        {gates && gates.blockers.length > 0 && proposal.status !== "accepted" && proposal.status !== "rejected" && (
+          <Card className="border-amber-500/30 bg-amber-500/5">
+            <CardContent className="flex items-start gap-3 p-4 text-sm">
+              <ShieldAlert className="h-5 w-5 shrink-0 text-amber-400 mt-0.5" />
+              <div>
+                <p className="font-medium text-amber-200">Governance gates active</p>
+                <ul className="mt-1 list-disc pl-4 text-muted-foreground space-y-0.5">
+                  {gates.blockers.map((b) => (
+                    <li key={b}>{b}</li>
+                  ))}
+                </ul>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {workflowError && (
+          <Card className="border-red-500/30">
+            <CardContent className="p-4 text-sm text-red-400">{workflowError}</CardContent>
+          </Card>
+        )}
+
+        {proposal.impact ? (
+          <div className="space-y-2">
+            <div className="flex justify-end">
+              <Button size="sm" variant="outline" onClick={rerunImpact} disabled={rerunningImpact}>
+                {rerunningImpact ? (
+                  <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                ) : (
+                  <RefreshCw className="mr-1 h-3 w-3" />
+                )}
+                Re-run Impact Agent
+              </Button>
+            </div>
+            <ImpactAnalysisPanel impact={proposal.impact} />
+          </div>
+        ) : (
+          <Card className="border-amber-500/30">
+            <CardContent className="flex items-center justify-between gap-4 p-4">
+              <p className="text-sm text-muted-foreground">Impact analysis pending — required before councils and voting.</p>
+              <Button size="sm" onClick={rerunImpact} disabled={rerunningImpact}>
+                {rerunningImpact ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Play className="mr-1 h-3 w-3" />}
+                Run Impact
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+
+        {(runningCouncils || (proposal.impact && workflow && !workflow.gates.councilsComplete)) && (
+          <Card>
+            <CardContent className="p-6">
+              <LoadingState message="Running Planning, Testing, and Evaluation councils…" size="sm" />
+            </CardContent>
+          </Card>
+        )}
+
+        {workflow?.gates.councilsComplete && workflow.enterpriseReport && (
+          <ProposalEnterpriseReport
+            report={workflow.enterpriseReport}
+            councilRuns={workflow.councilRuns}
+          />
+        )}
 
         {proposal.review?.teamSummary && (
           <Card className="border-primary/30 bg-primary/5">
@@ -188,22 +336,6 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ id: s
           </Card>
         )}
 
-        {proposal.impact && (
-          <div className="space-y-2">
-            <div className="flex justify-end">
-              <Button size="sm" variant="outline" onClick={rerunImpact} disabled={rerunningImpact}>
-                {rerunningImpact ? (
-                  <Loader2 className="mr-1 h-3 w-3 animate-spin" />
-                ) : (
-                  <RefreshCw className="mr-1 h-3 w-3" />
-                )}
-                Re-run Impact Agent
-              </Button>
-            </div>
-            <ImpactAnalysisPanel impact={proposal.impact} />
-          </div>
-        )}
-
         {proposal.votes && proposal.votes.length > 0 && (
           <Card>
             <CardHeader>
@@ -231,7 +363,9 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ id: s
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Your Vote (Worker)</CardTitle>
-              <CardDescription>Workers vote on suggestions. Manager makes the final decision.</CardDescription>
+              <CardDescription>
+                Voting opens after impact analysis and enterprise councils complete.
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               {pendingVote ? (
@@ -275,6 +409,14 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ id: s
           </Card>
         )}
 
+        {isWorker && !canVoteNow && !myVote && gates && !gates.councilsComplete && proposal.impact && (
+          <Card className="border-border/60">
+            <CardContent className="p-4 text-sm text-muted-foreground">
+              Voting unlocks after enterprise councils finish analyzing this proposal.
+            </CardContent>
+          </Card>
+        )}
+
         {myVote && (
           <Card className="border-primary/20">
             <CardContent className="p-4 text-sm">
@@ -294,13 +436,23 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ id: s
                   : "Accept adds to the branch. If implementing, requirements & tasks update."}
               </CardDescription>
             </CardHeader>
-            <CardContent className="flex gap-2">
-              <Button onClick={() => managerAction("accept")} disabled={acting}>
-                <Check className="mr-1 h-4 w-4" /> {acting ? "Working..." : "Accept"}
-              </Button>
-              <Button variant="destructive" onClick={() => managerAction("decline")} disabled={acting}>
-                <X className="mr-1 h-4 w-4" /> Decline
-              </Button>
+            <CardContent className="space-y-3">
+              {!gates?.canAccept && proposal.status !== "rejected" && (
+                <p className="text-xs text-amber-300/90">
+                  Accept is locked until impact analysis, all councils, and team consensus are complete.
+                </p>
+              )}
+              <div className="flex gap-2">
+                <Button
+                  onClick={() => managerAction("accept")}
+                  disabled={acting || !gates?.canAccept}
+                >
+                  <Check className="mr-1 h-4 w-4" /> {acting ? "Working..." : "Accept"}
+                </Button>
+                <Button variant="destructive" onClick={() => managerAction("decline")} disabled={acting}>
+                  <X className="mr-1 h-4 w-4" /> Decline
+                </Button>
+              </div>
             </CardContent>
           </Card>
         )}
@@ -309,6 +461,9 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ id: s
           <Card className="border-emerald-500/30 bg-emerald-500/5">
             <CardContent className="p-4 space-y-2">
               <p className="text-emerald-400 font-medium">✓ Accepted by manager.</p>
+              {gates?.memoryUpdated && (
+                <p className="text-sm text-muted-foreground">Project Brain memory updated with this decision.</p>
+              )}
               {proposal.targetType === "main" ? (
                 <p className="text-sm text-muted-foreground">
                   A new branch was created. Main idea unchanged. Others can add more suggestions to the branch.

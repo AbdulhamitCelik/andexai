@@ -281,6 +281,11 @@ export async function dbGetCouncilRuns(projectId?: string): Promise<CouncilRun[]
   return (await CouncilRunModel.find(q).sort({ createdAt: -1 }).lean()) as CouncilRun[];
 }
 
+export async function dbGetCouncilRunsForProposal(proposalId: string): Promise<CouncilRun[]> {
+  await ensureDb();
+  return (await CouncilRunModel.find({ proposalId }).sort({ createdAt: -1 }).lean()) as CouncilRun[];
+}
+
 export async function dbGetCouncilRun(id: string): Promise<CouncilRun | undefined> {
   await ensureDb();
   return lean(await CouncilRunModel.findOne({ id }).lean());

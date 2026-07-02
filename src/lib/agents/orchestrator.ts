@@ -25,12 +25,17 @@ import {
   dbSaveFeaturePack,
   dbClearDiscoveryForProject,
   dbClearProjectData,
+  dbGetCouncilRunsForProposal,
 } from "@/lib/db/repository";
 import { runProductDiscoveryAgent, featurePackToProposalText } from "@/lib/agents/product-discovery";
 import { analyzeAndStoreImpact } from "@/lib/agents/impact-agent";
 import { runPlanningCouncil } from "@/lib/councils/planning-council";
 import { buildResourcePlan, assignTasksFromResources } from "@/lib/engines/resource-engine";
 import { refreshProjectPriorities } from "@/lib/engines/priority-service";
+import {
+  councilsCompleteForProposal,
+  updateMemoryOnProposalAccept,
+} from "@/lib/proposals/proposal-workflow";
 import { getMockFeedback } from "@/lib/discovery/mock-feedback";
 import type {
   AgentLog,
@@ -311,6 +316,25 @@ async function generateReview(proposal: Proposal): Promise<ReviewAnalysis> {
 
 // ─── Voting ──────────────────────────────────────────────────────────────────
 
+async function assertProposalGovernanceForVote(proposal: Proposal): Promise<void> {
+  if (!proposal.impact) throw new Error("Impact analysis must complete before voting");
+  const runs = await dbGetCouncilRunsForProposal(proposal.id);
+  if (!councilsCompleteForProposal(runs)) {
+    throw new Error("Planning, Testing, and Evaluation councils must complete before consensus");
+  }
+}
+
+async function assertProposalGovernanceForAccept(proposal: Proposal): Promise<void> {
+  if (!proposal.impact) throw new Error("Impact analysis required before manager approval");
+  const runs = await dbGetCouncilRunsForProposal(proposal.id);
+  if (!councilsCompleteForProposal(runs)) {
+    throw new Error("All enterprise councils must complete before manager approval");
+  }
+  if (proposal.status !== "ready_for_manager") {
+    throw new Error("Team consensus must reach ready for manager before approval");
+  }
+}
+
 export async function castVote(
   proposalId: string,
   userId: string,
@@ -323,9 +347,10 @@ export async function castVote(
 
   const proposal = await dbGetProposal(proposalId);
   if (!proposal) throw new Error("Proposal not found");
-  if (!["under_review", "consensus_pending", "ready_for_manager", "needs_discussion"].includes(proposal.status)) {
+  if (!["under_review", "consensus_pending", "needs_discussion"].includes(proposal.status)) {
     throw new Error("This suggestion is not open for voting");
   }
+  await assertProposalGovernanceForVote(proposal);
 
   if (!proposal.votes) proposal.votes = [];
   const idx = proposal.votes.findIndex((v) => v.userId === userId);
@@ -377,12 +402,14 @@ export async function managerAcceptProposal(proposalId: string, managerId: strin
 
   const proposal = await dbGetProposal(proposalId);
   if (!proposal) throw new Error("Proposal not found");
+  await assertProposalGovernanceForAccept(proposal);
 
   proposal.managerDecision = "accepted";
   proposal.managerNote = note;
   proposal.status = "accepted";
   proposal.updatedAt = new Date().toISOString();
   await dbSaveProposal(proposal);
+  await updateMemoryOnProposalAccept(proposal);
   await log("consensus", "accept", proposal.title, note ?? "Accepted by manager", proposalId);
 
   if (proposal.targetType === "main") {

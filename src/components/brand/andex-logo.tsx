@@ -17,10 +17,10 @@ interface AndexBrandProps {
   tagline?: string;
 }
 
-/** Full logo image height (icon + ANDEX from asset). */
+/** Horizontal logo lockup (icon + ANDEX wordmark). */
 const logoHeights: Record<BrandSize, string> = {
-  sm: "h-7",
-  md: "h-9",
+  sm: "h-8",
+  md: "h-10",
   lg: "h-14 md:h-16",
 };
 
@@ -31,12 +31,12 @@ const aiText: Record<BrandSize, string> = {
 };
 
 const markSizes: Record<BrandSize, string> = {
-  sm: "h-7 w-7",
-  md: "h-8 w-8",
+  sm: "h-8 w-8",
+  md: "h-9 w-9",
   lg: "h-12 w-12",
 };
 
-/** Cropped icon mark for collapsed sidebar. */
+/** Cropped app icon from the left of the horizontal logo. */
 export function AndexMark({
   size = "md",
   className,
@@ -47,20 +47,20 @@ export function AndexMark({
   priority?: boolean;
 }) {
   return (
-    <div className={cn("relative shrink-0 overflow-hidden rounded-md", markSizes[size], className)}>
+    <div className={cn("relative shrink-0 overflow-hidden rounded-lg", markSizes[size], className)}>
       <Image
         src="/andex-logo.png"
         alt="Andex"
-        width={96}
-        height={192}
-        className="absolute left-1/2 top-0 h-[185%] w-auto max-w-none -translate-x-1/2 object-cover object-top"
+        width={512}
+        height={128}
+        className="absolute left-0 top-0 h-full w-auto max-w-none object-cover object-left"
         priority={priority}
       />
     </div>
   );
 }
 
-/** Full logo asset (icon + ANDEX) with optional AI suffix. */
+/** Full horizontal logo with optional AI suffix. */
 export function AndexLogoImage({
   size = "md",
   showAi = false,
@@ -73,17 +73,17 @@ export function AndexLogoImage({
   priority?: boolean;
 }) {
   return (
-    <span className={cn("inline-flex items-end gap-1", className)}>
+    <span className={cn("inline-flex items-center gap-2", className)}>
       <Image
         src="/andex-logo.png"
         alt="Andex"
-        width={240}
-        height={120}
+        width={512}
+        height={128}
         className={cn("w-auto shrink-0 object-contain", logoHeights[size])}
         priority={priority}
       />
       {showAi && (
-        <span className={cn("pb-px font-bold leading-none text-[#2970FF]", aiText[size])}>AI</span>
+        <span className={cn("font-bold leading-none text-[#6B9FFF]", aiText[size])}>AI</span>
       )}
     </span>
   );

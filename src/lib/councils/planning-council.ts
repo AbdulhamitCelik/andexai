@@ -19,7 +19,7 @@ const PLANNING_AGENTS = [
   "Risk Planning Agent",
 ];
 
-function buildPlanningReport(proposal: Proposal, branch: DecisionBranch): PlanningReport {
+export function buildPlanningReport(proposal: Proposal, branch: DecisionBranch): PlanningReport {
   const approve = proposal.votes?.filter((v) => v.vote.startsWith("approve")).length ?? 0;
   const total = Math.max(proposal.votes?.length ?? 0, 1);
   const priority = priorityFromProposal({

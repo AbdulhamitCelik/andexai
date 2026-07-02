@@ -61,7 +61,7 @@ export function SplashIntro() {
         <p className="font-display text-sm font-light tracking-[0.35em] uppercase text-rose-200/80 mb-6 animate-splash-rise">
           The product journey
         </p>
-        <div className="animate-splash-rise splash-delay-1 mb-6 rounded-2xl border border-white/25 bg-white/95 px-8 py-6 shadow-2xl shadow-black/30 backdrop-blur-sm">
+        <div className="animate-splash-rise splash-delay-1 mb-6 rounded-2xl border border-white/15 bg-black/90 px-8 py-6 shadow-2xl shadow-black/40 backdrop-blur-sm">
           <AndexLogo layout="stacked" size="lg" showAi priority />
         </div>
         <p className="font-display text-xl md:text-2xl font-light text-white/60 tracking-wide animate-splash-rise splash-delay-2">
