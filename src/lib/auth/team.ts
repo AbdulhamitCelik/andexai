@@ -9,6 +9,7 @@ export const TEAM_MEMBERS: TeamMember[] = [
   { id: "wkr-4", name: "Taylor", role: "worker", memoryRole: "intern" },
   { id: "wkr-5", name: "Riley", role: "worker", memoryRole: "developer" },
   { id: "wkr-6", name: "Casey", role: "worker", memoryRole: "intern" },
+  { id: "wkr-7", name: "Joachim", role: "worker", memoryRole: "developer" },
 ];
 
 export function getTeamMember(id: string): TeamMember | undefined {

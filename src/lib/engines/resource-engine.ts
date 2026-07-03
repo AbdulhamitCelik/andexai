@@ -8,6 +8,7 @@ const ROLE_SKILLS: Record<string, string[]> = {
   "wkr-4": ["Frontend", "UI", "Mobile"],
   "wkr-6": ["DevOps", "Deployment", "Monitoring"],
   "wkr-3": ["Documentation", "Support"],
+  "wkr-7": ["Product", "Full-stack", "Integration"],
 };
 
 const ROLE_LABELS: Record<string, string> = {
@@ -17,6 +18,7 @@ const ROLE_LABELS: Record<string, string> = {
   "wkr-4": "Frontend Engineer",
   "wkr-6": "DevOps Engineer",
   "wkr-3": "Documentation",
+  "wkr-7": "Product Engineer",
 };
 
 export function buildResourcePlan(input: {
