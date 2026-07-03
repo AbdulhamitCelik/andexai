@@ -6,12 +6,12 @@ import { VoiceAssistant } from "@/components/voice/voice-assistant";
 export default function CallPage() {
   return (
     <AppShell>
-      <div className="animate-in space-y-8 p-8">
+      <div className="page-shell">
         <header>
           <p className="font-display mb-2 text-xs font-light tracking-[0.25em] uppercase text-rose-300/70">
             Team Andex
           </p>
-          <h1 className="text-4xl font-bold tracking-tight">
+          <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
             <span className="text-gradient">Voice</span> Assistant
           </h1>
           <p className="mt-2 max-w-2xl text-sm text-muted-foreground">

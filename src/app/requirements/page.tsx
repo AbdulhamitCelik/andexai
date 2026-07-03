@@ -46,7 +46,7 @@ function RequirementsContent() {
 
   return (
     <AppShell>
-      <div className="p-8 space-y-6">
+      <div className="page-shell-tight">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
             <ClipboardList className="h-6 w-6 text-primary" />

@@ -82,7 +82,7 @@ export default function MemoryGovernancePage() {
 
   return (
     <AppShell>
-      <div className="p-8 space-y-8 max-w-6xl">
+      <div className="page-shell max-w-6xl">
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
             <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-primary/80 mb-2">

@@ -226,7 +226,7 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ id: s
 
   return (
     <AppShell>
-      <div className="p-8 space-y-6 max-w-5xl">
+      <div className="page-shell-tight max-w-5xl">
         <Link href="/proposals" className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
           <ArrowLeft className="h-4 w-4" /> Back to suggestions
         </Link>

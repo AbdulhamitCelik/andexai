@@ -112,7 +112,7 @@ function DashboardContent() {
   const primaryProject = projects[0];
 
   return (
-    <div className="animate-in space-y-8 p-8">
+    <div className="page-shell">
       {data.error && (
         <Card className="border-amber-500/30">
           <CardContent className="p-4 text-sm text-amber-200">

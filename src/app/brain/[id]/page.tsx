@@ -98,7 +98,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
 
   return (
     <AppShell>
-      <div className="p-8 space-y-6 max-w-3xl">
+      <div className="page-shell-tight max-w-3xl">
         <Link href="/brain" className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
           <ArrowLeft className="h-4 w-4" /> All projects
         </Link>

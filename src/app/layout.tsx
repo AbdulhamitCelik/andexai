@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import { UserProvider } from "@/lib/context/user-context";
 import { ThemeProvider } from "@/lib/context/theme-context";
@@ -17,6 +17,13 @@ export const metadata: Metadata = {
     icon: "/andex-logo.png",
     apple: "/andex-logo.png",
   },
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({

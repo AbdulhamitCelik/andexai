@@ -17,6 +17,9 @@ interface ShortcutsContextValue {
   sidebarCollapsed: boolean;
   setSidebarCollapsed: (v: boolean) => void;
   toggleSidebar: () => void;
+  mobileNavOpen: boolean;
+  setMobileNavOpen: (open: boolean) => void;
+  closeMobileNav: () => void;
   refreshKey: number;
   triggerRefresh: () => void;
   pendingGoKey: boolean;
@@ -39,16 +42,19 @@ export function ShortcutsProvider({ children }: { children: React.ReactNode }) {
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [guideOpen, setGuideOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [pendingGoKey, setPendingGoKey] = useState(false);
 
   const triggerRefresh = useCallback(() => setRefreshKey((k) => k + 1), []);
   const toggleSidebar = useCallback(() => setSidebarCollapsed((c) => !c), []);
+  const closeMobileNav = useCallback(() => setMobileNavOpen(false), []);
 
   const closeAll = useCallback(() => {
     setCommandOpen(false);
     setShortcutsOpen(false);
     setGuideOpen(false);
+    setMobileNavOpen(false);
   }, []);
 
   useEffect(() => {
@@ -155,6 +161,13 @@ export function ShortcutsProvider({ children }: { children: React.ReactNode }) {
     router,
   ]);
 
+  useEffect(() => {
+    document.body.style.overflow = mobileNavOpen ? "hidden" : "";
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [mobileNavOpen]);
+
   return (
     <ShortcutsContext.Provider
       value={{
@@ -167,6 +180,9 @@ export function ShortcutsProvider({ children }: { children: React.ReactNode }) {
         sidebarCollapsed,
         setSidebarCollapsed,
         toggleSidebar,
+        mobileNavOpen,
+        setMobileNavOpen,
+        closeMobileNav,
         refreshKey,
         triggerRefresh,
         pendingGoKey,

@@ -9,7 +9,7 @@ export function ExperienceModePicker() {
   const { confirmMode } = useExperienceMode();
 
   return (
-    <div className="experience-picker-overlay fixed inset-0 z-[120] flex items-center justify-center p-6">
+    <div className="experience-picker-overlay fixed inset-0 z-[120] flex items-center justify-center overflow-y-auto p-4 sm:p-6">
       <div className="experience-picker-ink absolute inset-0" />
       <div className="relative z-10 w-full max-w-3xl animate-in">
         <div className="mb-8 text-center">

@@ -57,7 +57,7 @@ export default function BranchesPage() {
 
   return (
     <AppShell>
-      <div className="p-8 space-y-6">
+      <div className="page-shell-tight">
         <div>
           <h1 className="text-2xl font-bold">Branches</h1>
           <p className="text-sm text-muted-foreground">

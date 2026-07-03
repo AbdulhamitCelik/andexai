@@ -116,11 +116,11 @@ function LifecycleContent() {
   const latestRun = (id: string) => dashboard?.runs.find((r) => r.councilId === id);
 
   return (
-    <div className="animate-in space-y-8 p-8">
+    <div className="page-shell">
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <p className="font-display mb-2 text-xs font-light tracking-[0.25em] uppercase text-rose-300/70">Product lifecycle</p>
-          <h1 className="text-4xl font-bold tracking-tight">
+          <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
             <span className="text-gradient">Product</span> Operating System
           </h1>
           <p className="mt-2 max-w-2xl text-sm text-muted-foreground">

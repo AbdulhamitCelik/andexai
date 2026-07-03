@@ -11,8 +11,9 @@ export function KeyboardHintsBar() {
   return (
     <div
       className={cn(
-        "fixed bottom-0 right-0 z-[80] flex items-center gap-3 border-t border-l border-border/50 bg-card/90 backdrop-blur-md px-4 py-1.5 text-[10px] text-muted-foreground transition-all",
-        sidebarCollapsed ? "left-[4.5rem]" : "left-64"
+        "fixed bottom-0 right-0 z-[80] flex items-center gap-2 sm:gap-3 border-t border-l border-border/50 bg-card/90 backdrop-blur-md px-3 sm:px-4 py-1.5 text-[10px] text-muted-foreground transition-all",
+        "left-0 md:left-auto",
+        sidebarCollapsed ? "md:left-[4.5rem]" : "md:left-64"
       )}
     >
       {pendingGoKey && (

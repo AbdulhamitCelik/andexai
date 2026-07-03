@@ -2,6 +2,7 @@
 
 import { cn } from "@/lib/utils";
 import { Sidebar } from "@/components/layout/sidebar";
+import { MobileHeader } from "@/components/layout/mobile-header";
 import { ShortcutsProvider, useShortcuts } from "@/lib/context/shortcuts-context";
 import { CommandPalette } from "@/components/shortcuts/command-palette";
 import { ShortcutsModal } from "@/components/shortcuts/shortcuts-modal";
@@ -19,18 +20,35 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 }
 
 function ShellInner({ children }: { children: React.ReactNode }) {
-  const { sidebarCollapsed } = useShortcuts();
+  const { sidebarCollapsed, mobileNavOpen, closeMobileNav } = useShortcuts();
   const { isGamified } = useExperienceMode();
 
   return (
     <>
-      <div className="flex h-screen min-h-screen overflow-hidden">
+      {mobileNavOpen && (
+        <button
+          type="button"
+          aria-label="Close navigation menu"
+          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-[2px] md:hidden"
+          onClick={closeMobileNav}
+        />
+      )}
+
+      <div className="flex h-[100dvh] min-h-[100dvh] overflow-hidden">
         <Sidebar collapsed={sidebarCollapsed} />
-        <main className={cn("flex-1 overflow-auto pb-10 transition-all duration-300", sidebarCollapsed && "md:ml-0")}>
-          {isGamified && <GamifiedHud />}
-          {isGamified && <GamifiedQuestBoard />}
-          {children}
-        </main>
+        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+          <MobileHeader />
+          <main
+            className={cn(
+              "flex-1 overflow-x-hidden overflow-y-auto pb-14 md:pb-10 transition-all duration-300",
+              sidebarCollapsed && "md:ml-0"
+            )}
+          >
+            {isGamified && <GamifiedHud />}
+            {isGamified && <GamifiedQuestBoard />}
+            {children}
+          </main>
+        </div>
       </div>
       <CommandPalette />
       <ShortcutsModal />

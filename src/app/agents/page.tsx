@@ -19,7 +19,7 @@ export default function AgentsPage() {
 
   return (
     <AppShell>
-      <div className="p-8 space-y-6">
+      <div className="page-shell-tight">
         <div>
           <h1 className="text-2xl font-bold">Agent Activity Log</h1>
           <p className="text-sm text-muted-foreground">Transparent, auditable, explainable — every AI action recorded</p>

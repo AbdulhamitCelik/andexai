@@ -27,6 +27,7 @@ import {
   PanelLeft,
   PhoneCall,
   Gamepad2,
+  X,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { AndexLogo } from "@/components/brand/andex-logo";
@@ -75,36 +76,69 @@ const nav = [
 export function Sidebar({ collapsed = false }: { collapsed?: boolean }) {
   const pathname = usePathname();
   const { currentUser, setCurrentUser, isManager } = useUser();
-  const { setCommandOpen, setShortcutsOpen, setGuideOpen, toggleSidebar } = useShortcuts();
+  const { setCommandOpen, setShortcutsOpen, setGuideOpen, toggleSidebar, mobileNavOpen, closeMobileNav } =
+    useShortcuts();
   const { isGamified, level, xp, setMode, mode } = useExperienceMode();
 
   const managers = TEAM_MEMBERS.filter((m) => m.role === "manager");
   const workers = TEAM_MEMBERS.filter((m) => m.role === "worker");
   const xpBar = xpProgressInLevel(xp);
+  const compact = collapsed && !mobileNavOpen;
+
+  useEffect(() => {
+    closeMobileNav();
+  }, [pathname, closeMobileNav]);
 
   return (
     <aside
       className={cn(
-        "flex h-screen shrink-0 flex-col border-r border-border/70 glass transition-all duration-300",
-        collapsed ? "w-[4.5rem]" : "w-64",
+        "fixed inset-y-0 left-0 z-50 flex h-[100dvh] w-[min(18rem,88vw)] flex-col border-r border-border/70 glass transition-transform duration-300 ease-in-out",
+        "md:relative md:z-auto md:h-screen md:translate-x-0 md:shrink-0",
+        mobileNavOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0",
+        collapsed ? "md:w-[4.5rem]" : "md:w-64",
         isGamified && "gamified-sidebar border-amber-500/20"
       )}
     >
-      <div className={cn("border-b border-border/70", collapsed ? "p-3" : "p-5")}>
-        <div className={collapsed ? "flex justify-center" : undefined}>
-          <AndexLogo
-            href="/"
-            iconOnly={collapsed}
+      <div className={cn("border-b border-border/70", compact ? "p-3" : "p-4 md:p-5")}>
+        <div className="flex items-start justify-between gap-2">
+          <div className={cn(compact ? "flex justify-center w-full" : "min-w-0 flex-1")}>
+            <AndexLogo
+              href="/"
+              iconOnly={compact}
+              size="sm"
+              showAi
+              tagline={
+                compact
+                  ? undefined
+                  : isGamified
+                    ? "Quest Mode — earn XP as you build"
+                    : "AI councils for product development"
+              }
+              priority
+            />
+          </div>
+          <Button
+            variant="ghost"
             size="sm"
-            showAi
-            tagline={collapsed ? undefined : isGamified ? "Quest Mode — earn XP as you build" : "AI councils for product development"}
-            priority
-          />
+            className="h-8 w-8 shrink-0 p-0 md:hidden"
+            onClick={closeMobileNav}
+            aria-label="Close navigation menu"
+          >
+            <X className="h-4 w-4" />
+          </Button>
         </div>
-        {!collapsed && (
+        {!compact && (
           <div className="mt-3 flex gap-1">
-            <Button variant="outline" size="sm" className="flex-1 h-8 text-[10px] gap-1 px-2" onClick={() => setCommandOpen(true)}>
-              <Command className="h-3 w-3" /> Ctrl+K
+            <Button
+              variant="outline"
+              size="sm"
+              className="flex-1 h-8 text-[10px] gap-1 px-2"
+              onClick={() => {
+                setCommandOpen(true);
+                closeMobileNav();
+              }}
+            >
+              <Command className="h-3 w-3" /> <span className="hidden sm:inline">Ctrl+K</span><span className="sm:hidden">Search</span>
             </Button>
             <Button variant="ghost" size="sm" className="h-8 w-8 p-0" title="Quick start" onClick={() => setGuideOpen(true)}>
               <BookOpen className="h-3.5 w-3.5" />
@@ -116,7 +150,7 @@ export function Sidebar({ collapsed = false }: { collapsed?: boolean }) {
         )}
       </div>
 
-      {!collapsed && (
+      {!compact && (
       <div className="border-b border-border/70 p-4 space-y-2">
         <p className="text-[10px] uppercase tracking-wider text-muted-foreground flex items-center gap-1">
           <User className="h-3 w-3" /> Team member
@@ -143,7 +177,7 @@ export function Sidebar({ collapsed = false }: { collapsed?: boolean }) {
         <Badge variant={isManager ? "success" : "secondary"} className="text-[10px]">
           {isGamified ? (isManager ? "Guild Master" : "Adventurer") : isManager ? "Manager" : "Worker"}
         </Badge>
-        {isGamified && !collapsed && (
+        {isGamified && !compact && (
           <div className="rounded-lg border border-amber-500/25 bg-amber-500/10 p-2 space-y-1.5">
             <div className="flex items-center justify-between text-[10px]">
               <span className="text-amber-300/90">Level {level}</span>
@@ -166,7 +200,7 @@ export function Sidebar({ collapsed = false }: { collapsed?: boolean }) {
       <nav className="flex-1 space-y-6 overflow-y-auto p-4">
         {nav.map((group) => (
           <div key={group.section}>
-            {!collapsed && (
+            {!compact && (
             <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">
               {isGamified ? gamifiedSection(group.section) : group.section}
             </p>
@@ -179,10 +213,11 @@ export function Sidebar({ collapsed = false }: { collapsed?: boolean }) {
                   <Link
                     key={item.href}
                     href={item.href}
-                    title={collapsed ? label : undefined}
+                    title={compact ? label : undefined}
+                    onClick={closeMobileNav}
                     className={cn(
-                      "group relative flex items-center rounded-lg text-sm transition-colors",
-                      collapsed ? "justify-center px-2 py-2.5" : "gap-3 px-3 py-2",
+                      "group relative flex items-center rounded-lg text-sm transition-colors min-h-[44px]",
+                      compact ? "justify-center px-2 py-2.5" : "gap-3 px-3 py-2",
                       active
                         ? isGamified
                           ? "bg-amber-500/15 text-amber-200"
@@ -190,7 +225,7 @@ export function Sidebar({ collapsed = false }: { collapsed?: boolean }) {
                         : "text-muted-foreground hover:bg-accent/60 hover:text-foreground"
                     )}
                   >
-                    {active && !collapsed && (
+                    {active && !compact && (
                       <span
                         className={cn(
                           "absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-full",
@@ -199,7 +234,7 @@ export function Sidebar({ collapsed = false }: { collapsed?: boolean }) {
                       />
                     )}
                     <item.icon className="h-4 w-4 shrink-0" />
-                    {!collapsed && label}
+                    {!compact && label}
                   </Link>
                 );
               })}
@@ -208,9 +243,9 @@ export function Sidebar({ collapsed = false }: { collapsed?: boolean }) {
         ))}
       </nav>
 
-      {!collapsed && <LlmStatus />}
+      {!compact && <LlmStatus />}
       <div className="border-t border-border/70 p-4 space-y-2">
-        {!collapsed && (
+        {!compact && (
           <Button
             variant="outline"
             size="sm"
@@ -228,8 +263,13 @@ export function Sidebar({ collapsed = false }: { collapsed?: boolean }) {
             )}
           </Button>
         )}
-        <ThemeToggle collapsed={collapsed} />
-        <Button variant="ghost" size="sm" className={cn("w-full gap-2", collapsed && "px-0")} onClick={toggleSidebar}>
+        <ThemeToggle collapsed={compact} />
+        <Button
+          variant="ghost"
+          size="sm"
+          className={cn("hidden md:flex w-full gap-2", collapsed && "px-0")}
+          onClick={toggleSidebar}
+        >
           {collapsed ? <PanelLeft className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
           {!collapsed && "Collapse sidebar"}
         </Button>

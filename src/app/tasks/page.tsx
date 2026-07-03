@@ -42,7 +42,7 @@ export default function TasksPage() {
 
   return (
     <AppShell>
-      <div className="p-8 space-y-6">
+      <div className="page-shell-tight">
         <div>
           <h1 className="text-2xl font-bold">Implementation</h1>
           <p className="text-sm text-muted-foreground">

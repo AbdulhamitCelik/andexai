@@ -458,7 +458,7 @@ export function VoiceAssistant() {
       <div className="lg:col-span-2 space-y-6">
         <Card className="glass overflow-hidden">
           <CardContent className="p-0">
-            <div className="flex flex-col items-center justify-center gap-6 border-b border-border/70 bg-gradient-to-b from-primary/5 to-transparent px-8 py-12">
+            <div className="flex flex-col items-center justify-center gap-6 border-b border-border/70 bg-gradient-to-b from-primary/5 to-transparent px-4 py-8 sm:px-8 sm:py-12">
               <div
                 className={cn(
                   "relative flex h-32 w-32 items-center justify-center rounded-full border-2 transition-all duration-500",

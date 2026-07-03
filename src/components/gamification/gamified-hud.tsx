@@ -93,7 +93,7 @@ export function GamifiedQuestBoard() {
   const unlocked = new Set(achievements);
 
   return (
-    <div className="border-b border-amber-500/15 bg-gradient-to-b from-amber-500/5 to-transparent px-8 py-6">
+    <div className="border-b border-amber-500/15 bg-gradient-to-b from-amber-500/5 to-transparent px-4 py-5 sm:px-6 lg:px-8">
       <div className="flex flex-wrap items-start justify-between gap-4 mb-4">
         <div>
           <p className="text-[10px] uppercase tracking-[0.2em] text-amber-300/80">Quest Mode</p>
