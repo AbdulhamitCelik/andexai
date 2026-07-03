@@ -13,6 +13,7 @@ import {
   Keyboard,
   Sparkles,
   RefreshCw,
+  PhoneCall,
 } from "lucide-react";
 
 export type ShortcutTier = "beginner" | "expert" | "both";
@@ -50,6 +51,7 @@ export const SHORTCUTS: ShortcutDefinition[] = [
   { id: "go-proposals", keys: ["G", "P"], label: "Go to Suggestions", description: "Press G then P", tier: "expert", category: "navigation" },
   { id: "go-tasks", keys: ["G", "T"], label: "Go to Tasks", description: "Press G then T", tier: "expert", category: "navigation" },
   { id: "go-governance", keys: ["G", "M"], label: "Go to Memory Governance", description: "Press G then M", tier: "expert", category: "navigation" },
+  { id: "go-call", keys: ["G", "C"], label: "Go to Voice Assistant", description: "Press G then C", tier: "both", category: "navigation" },
   { id: "role-manager", keys: ["Ctrl", "Shift", "1"], label: "Switch to Manager", description: "Demo as Sarah (manager)", tier: "both", category: "roles" },
   { id: "role-developer", keys: ["Ctrl", "Shift", "2"], label: "Switch to Developer", description: "Demo as Alex (developer)", tier: "both", category: "roles" },
   { id: "role-intern", keys: ["Ctrl", "Shift", "3"], label: "Switch to Intern", description: "Demo as Sam (intern) — restricted memory", tier: "both", category: "roles" },
@@ -65,6 +67,7 @@ export const COMMAND_ITEMS: CommandItem[] = [
   { id: "nav-tasks", label: "Implementation Tasks", href: "/tasks", icon: ListTodo, keywords: ["tasks", "implementation"], tier: "both" },
   { id: "nav-brain", label: "Main Ideas / Project Brain", href: "/brain", icon: Brain, keywords: ["brain", "memory", "vision"], tier: "both" },
   { id: "nav-governance", label: "Memory Governance", href: "/memory-governance", icon: Shield, keywords: ["permissions", "governance"], tier: "both" },
+  { id: "nav-call", label: "Voice Assistant", href: "/call", icon: PhoneCall, keywords: ["voice", "talk", "call", "mic", "assistant"], tier: "both" },
   { id: "action-theme", label: "Toggle dark / light mode", action: "toggle-theme", icon: Moon, keywords: ["theme", "dark", "light"], tier: "both" },
   { id: "action-shortcuts", label: "Show keyboard shortcuts", action: "show-shortcuts", icon: Keyboard, keywords: ["help", "keys"], tier: "beginner" },
   { id: "action-guide", label: "Open quick start guide", action: "show-guide", icon: Sparkles, keywords: ["beginner", "tutorial", "start"], tier: "beginner" },
@@ -83,6 +86,7 @@ export const VIM_NAV_MAP: Record<string, string> = {
   t: "/tasks",
   m: "/memory-governance",
   g: "/brain",
+  c: "/call",
 };
 
 export const BEGINNER_STEPS = [

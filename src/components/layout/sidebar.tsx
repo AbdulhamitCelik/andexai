@@ -25,12 +25,16 @@ import {
   BookOpen,
   PanelLeftClose,
   PanelLeft,
+  PhoneCall,
+  Gamepad2,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { AndexLogo } from "@/components/brand/andex-logo";
 import { useTheme } from "@/lib/context/theme-context";
 import { useShortcuts } from "@/lib/context/shortcuts-context";
 import { Button } from "@/components/ui/button";
+import { useExperienceMode } from "@/lib/context/experience-mode-context";
+import { gamifiedLabel, gamifiedSection, xpProgressInLevel } from "@/lib/gamification/quests";
 
 const nav = [
   {
@@ -38,6 +42,7 @@ const nav = [
     items: [
       { href: "/", label: "Dashboard", icon: LayoutDashboard },
       { href: "/lifecycle", label: "Lifecycle OS", icon: Workflow },
+      { href: "/call", label: "Voice Assistant", icon: PhoneCall },
     ],
   },
   {
@@ -71,15 +76,18 @@ export function Sidebar({ collapsed = false }: { collapsed?: boolean }) {
   const pathname = usePathname();
   const { currentUser, setCurrentUser, isManager } = useUser();
   const { setCommandOpen, setShortcutsOpen, setGuideOpen, toggleSidebar } = useShortcuts();
+  const { isGamified, level, xp, setMode, mode } = useExperienceMode();
 
   const managers = TEAM_MEMBERS.filter((m) => m.role === "manager");
   const workers = TEAM_MEMBERS.filter((m) => m.role === "worker");
+  const xpBar = xpProgressInLevel(xp);
 
   return (
     <aside
       className={cn(
         "flex h-screen shrink-0 flex-col border-r border-border/70 glass transition-all duration-300",
-        collapsed ? "w-[4.5rem]" : "w-64"
+        collapsed ? "w-[4.5rem]" : "w-64",
+        isGamified && "gamified-sidebar border-amber-500/20"
       )}
     >
       <div className={cn("border-b border-border/70", collapsed ? "p-3" : "p-5")}>
@@ -89,7 +97,7 @@ export function Sidebar({ collapsed = false }: { collapsed?: boolean }) {
             iconOnly={collapsed}
             size="sm"
             showAi
-            tagline={collapsed ? undefined : "AI councils for product development"}
+            tagline={collapsed ? undefined : isGamified ? "Quest Mode — earn XP as you build" : "AI councils for product development"}
             priority
           />
         </div>
@@ -133,8 +141,22 @@ export function Sidebar({ collapsed = false }: { collapsed?: boolean }) {
           </optgroup>
         </select>
         <Badge variant={isManager ? "success" : "secondary"} className="text-[10px]">
-          {isManager ? "Manager" : "Worker"}
+          {isGamified ? (isManager ? "Guild Master" : "Adventurer") : isManager ? "Manager" : "Worker"}
         </Badge>
+        {isGamified && !collapsed && (
+          <div className="rounded-lg border border-amber-500/25 bg-amber-500/10 p-2 space-y-1.5">
+            <div className="flex items-center justify-between text-[10px]">
+              <span className="text-amber-300/90">Level {level}</span>
+              <span className="text-muted-foreground">{xpBar.current}/{xpBar.max} XP</span>
+            </div>
+            <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-amber-400 to-violet-400"
+                style={{ width: `${xpBar.percent}%` }}
+              />
+            </div>
+          </div>
+        )}
         <Badge variant="secondary" className="text-[10px] capitalize">
           Memory: {currentUser.memoryRole}
         </Badge>
@@ -146,30 +168,38 @@ export function Sidebar({ collapsed = false }: { collapsed?: boolean }) {
           <div key={group.section}>
             {!collapsed && (
             <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">
-              {group.section}
+              {isGamified ? gamifiedSection(group.section) : group.section}
             </p>
             )}
             <div className="space-y-1">
               {group.items.map((item) => {
                 const active = pathname === item.href || pathname.startsWith(item.href + "/");
+                const label = isGamified ? gamifiedLabel(item.label, item.href) : item.label;
                 return (
                   <Link
                     key={item.href}
                     href={item.href}
-                    title={collapsed ? item.label : undefined}
+                    title={collapsed ? label : undefined}
                     className={cn(
                       "group relative flex items-center rounded-lg text-sm transition-colors",
                       collapsed ? "justify-center px-2 py-2.5" : "gap-3 px-3 py-2",
                       active
-                        ? "bg-primary/10 text-primary"
+                        ? isGamified
+                          ? "bg-amber-500/15 text-amber-200"
+                          : "bg-primary/10 text-primary"
                         : "text-muted-foreground hover:bg-accent/60 hover:text-foreground"
                     )}
                   >
                     {active && !collapsed && (
-                      <span className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-full bg-primary" />
+                      <span
+                        className={cn(
+                          "absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-full",
+                          isGamified ? "bg-amber-400" : "bg-primary"
+                        )}
+                      />
                     )}
                     <item.icon className="h-4 w-4 shrink-0" />
-                    {!collapsed && item.label}
+                    {!collapsed && label}
                   </Link>
                 );
               })}
@@ -180,6 +210,24 @@ export function Sidebar({ collapsed = false }: { collapsed?: boolean }) {
 
       {!collapsed && <LlmStatus />}
       <div className="border-t border-border/70 p-4 space-y-2">
+        {!collapsed && (
+          <Button
+            variant="outline"
+            size="sm"
+            className={cn("w-full gap-2 text-[11px]", isGamified && "border-amber-500/30 text-amber-200")}
+            onClick={() => (mode === "gamified" ? setMode("normal") : setMode("gamified"))}
+          >
+            {mode === "gamified" ? (
+              <>
+                <BookOpen className="h-4 w-4" /> Switch to Classic
+              </>
+            ) : (
+              <>
+                <Gamepad2 className="h-4 w-4" /> Switch to Quest Mode
+              </>
+            )}
+          </Button>
+        )}
         <ThemeToggle collapsed={collapsed} />
         <Button variant="ghost" size="sm" className={cn("w-full gap-2", collapsed && "px-0")} onClick={toggleSidebar}>
           {collapsed ? <PanelLeft className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}

@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import { UserProvider } from "@/lib/context/user-context";
 import { ThemeProvider } from "@/lib/context/theme-context";
+import { ExperienceModeProvider } from "@/lib/context/experience-mode-context";
+import { ExperienceGate } from "@/components/experience/experience-mode-picker";
 import { SplashIntro } from "@/components/lifecycle/splash-intro";
 import "./globals.css";
 
@@ -34,8 +36,12 @@ export default function RootLayout({
       <body className={`${inter.variable} font-sans`}>
         <ThemeProvider>
           <UserProvider>
-            <SplashIntro />
-            {children}
+            <ExperienceModeProvider>
+              <ExperienceGate>
+                <SplashIntro />
+                {children}
+              </ExperienceGate>
+            </ExperienceModeProvider>
           </UserProvider>
         </ThemeProvider>
       </body>
