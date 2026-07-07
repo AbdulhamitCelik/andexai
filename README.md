@@ -291,6 +291,6 @@ GROQ_API_KEY=gsk_...            # Optional — any one LLM key enables AI featur
 
 ## Hackathon
 
-UK AI Agent Hackathon EP5 — Imperial College London
+UK AI Agent Hackathon EP5 x Conduct — Imperial College London
 
 Team: 7 Computer Science students | Duration: 7 days
